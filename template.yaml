@@ -12,11 +12,66 @@ Description: >-
 Transform:
 - AWS::Serverless-2016-10-31
 
+Parameters:
+  Email:
+    Type: String
+  CallbackUrl:
+    Type: String
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 Resources:
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  CognitoAuthorizerUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties: 
+      UserPoolName: cognito-user-pool-userpool
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+
+  CognitoAuthorizerUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties: 
+      AllowedOAuthFlows: 
+        - code
+      AllowedOAuthFlowsUserPoolClient: True
+      AllowedOAuthScopes: 
+        - email
+        - openid
+        - profile
+      CallbackURLs: 
+        - !Ref CallbackUrl
+      ClientName: cognito-user-pool-client
+      SupportedIdentityProviders: 
+        - COGNITO
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+  
+  CognitoAuthorizerUserPoolUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties: 
+      UserAttributes: 
+        - Name: email
+          Value: !Ref Email
+      Username: !Ref Email
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+      
+  CognitoAuthorizerUserPoolResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties: 
+      Identifier: com.apigw
+      Name: com.apigw
+      Scopes: 
+        - ScopeDescription: scope_description
+          ScopeName: scope_name
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+
+  CognitoAuthorizerUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties: 
+      Domain: !Sub user-pool-domain-${AWS::AccountId}
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+
 
   # This is a Lambda function config associated with the source code: get-all-items.js
   getAllItemsFunction:
@@ -117,3 +172,7 @@ Outputs:
   WebEndpoint:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+
+  HostedUi:
+    Description: Hosted UI
+    Value: !Sub "https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAuthorizerUserPoolClient}&response_type=token&scope=email+openid+profile&redirect_uri=${CallbackUrl}"
