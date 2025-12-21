@@ -10,8 +10,8 @@ on:
       - 'feature**'
 
 env:
-  PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AKIA2IXOVKN2MMGHBQ5U }}
-  PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.LGBUpPUU6yx/htFvpyRvTuI7x1pWwngXmHjw2Ume }}
+  PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.PIPELINE_USER_ACCESS_KEY_ID }}
+  PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_USER_SECRET_ACCESS_KEY }}
   SAM_TEMPLATE: template.yaml
   TESTING_STACK_NAME: bg-checks-api
   TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-build-pip-PipelineExecutionRole-4xz9c9WIpH8y
