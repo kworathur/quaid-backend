@@ -15,7 +15,7 @@ lint = true
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
-resolve_s3 = true
+resolve_s3 = false
 s3_prefix = "bg-checks-api"
 region = "us-east-1"
 image_repositories = []
@@ -23,7 +23,7 @@ disable_rollback = true
 parameter_overrides = "Email=\"keshavworathur@gmail.com\" CallbackUrl=\"https://google.com\""
 
 [default.package.parameters]
-resolve_s3 = true
+resolve_s3 = false
 
 [default.sync.parameters]
 watch = true
