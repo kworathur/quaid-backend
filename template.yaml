@@ -4,13 +4,12 @@
 # The AWSTemplateFormatVersion identifies the capabilities of the template
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
 AWSTemplateFormatVersion: 2010-09-09
-Description: >-
-  bg-checks-api
+Description: bg-checks-api
 
 # Transform section specifies one or more macros that AWS CloudFormation uses to process your template
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
 Transform:
-- AWS::Serverless-2016-10-31
+  - AWS::Serverless-2016-10-31
 
 Parameters:
   Email:
@@ -19,61 +18,62 @@ Parameters:
     Type: String
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+
 Resources:
-  # Each Lambda function is defined by properties:
-  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
   CognitoAuthorizerUserPool:
     Type: AWS::Cognito::UserPool
-    Properties: 
+    Properties:
       UserPoolName: cognito-user-pool-userpool
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
 
   CognitoAuthorizerUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
-    Properties: 
-      AllowedOAuthFlows: 
+    Properties:
+      AllowedOAuthFlows:
         - code
-      AllowedOAuthFlowsUserPoolClient: True
-      AllowedOAuthScopes: 
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
         - email
         - openid
         - profile
-      CallbackURLs: 
+      CallbackURLs:
         - !Ref CallbackUrl
       ClientName: cognito-user-pool-client
-      SupportedIdentityProviders: 
+      SupportedIdentityProviders:
         - COGNITO
       UserPoolId: !Ref CognitoAuthorizerUserPool
-  
+
   CognitoAuthorizerUserPoolUser:
     Type: AWS::Cognito::UserPoolUser
-    Properties: 
-      UserAttributes: 
+    Properties:
+      UserAttributes:
         - Name: email
           Value: !Ref Email
       Username: !Ref Email
       UserPoolId: !Ref CognitoAuthorizerUserPool
-      
+
   CognitoAuthorizerUserPoolResourceServer:
     Type: AWS::Cognito::UserPoolResourceServer
-    Properties: 
+    Properties:
       Identifier: com.apigw
       Name: com.apigw
-      Scopes: 
+      Scopes:
         - ScopeDescription: scope_description
           ScopeName: scope_name
       UserPoolId: !Ref CognitoAuthorizerUserPool
 
   CognitoAuthorizerUserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
-    Properties: 
+    Properties:
       Domain: !Sub user-pool-domain-${AWS::AccountId}
       UserPoolId: !Ref CognitoAuthorizerUserPool
+      # Each Lambda function is defined by properties:
+      # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
 
-  # This is a Lambda function config associated with the source code: get-all-items.js
+      # This is a Lambda function config associated with the source code: get-all-items.js
   getAllItemsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -83,7 +83,8 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: A simple example includes a HTTP get method to get all items from a DynamoDB table.
+      Description: A simple example includes a HTTP get method to get all items from a
+        DynamoDB table.
       Policies:
         # Give Create/Read/Update/Delete Permissions to the SampleTable
         - DynamoDBCrudPolicy:
@@ -98,8 +99,6 @@ Resources:
           Properties:
             Path: /
             Method: GET
-  # Each Lambda function is defined by properties:
-  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
   # This is a Lambda function config associated with the source code: get-by-id.js
   getByIdFunction:
@@ -111,7 +110,8 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: A simple example includes a HTTP get method to get one item by id from a DynamoDB table.
+      Description: A simple example includes a HTTP get method to get one item by id
+        from a DynamoDB table.
       Policies:
         # Give Create/Read/Update/Delete Permissions to the SampleTable
         - DynamoDBCrudPolicy:
@@ -126,8 +126,6 @@ Resources:
           Properties:
             Path: /{id}
             Method: GET
-  # Each Lambda function is defined by properties:
-  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
   # This is a Lambda function config associated with the source code: put-item.js
   putItemFunction:
@@ -139,7 +137,8 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: A simple example includes a HTTP post method to add one item to a DynamoDB table.
+      Description: A simple example includes a HTTP post method to add one item to a
+        DynamoDB table.
       Policies:
         # Give Create/Read/Update/Delete Permissions to the SampleTable
         - DynamoDBCrudPolicy:
@@ -154,6 +153,7 @@ Resources:
           Properties:
             Path: /
             Method: POST
+
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 
@@ -170,9 +170,9 @@ Resources:
 
 Outputs:
   WebEndpoint:
-    Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Description: API Gateway endpoint URL for Prod stage
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
 
   HostedUi:
     Description: Hosted UI
-    Value: !Sub "https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAuthorizerUserPoolClient}&response_type=token&scope=email+openid+profile&redirect_uri=${CallbackUrl}"
+    Value: !Sub https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAuthorizerUserPoolClient}&response_type=token&scope=email+openid+profile&redirect_uri=${CallbackUrl}
