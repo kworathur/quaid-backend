@@ -20,7 +20,7 @@ s3_prefix = "bg-checks-api"
 region = "us-east-1"
 image_repositories = []
 disable_rollback = true
-parameter_overrides = "Email=\"keshavworathur@gmail.com\" CallbackUrl=\"https://google.com\""
+parameter_overrides = "Email=\"keshavworathur@gmail.com\" CallbackUrl=\"http://localhost:5173\""
 
 [default.package.parameters]
 resolve_s3 = false
