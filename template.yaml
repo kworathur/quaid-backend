@@ -97,13 +97,13 @@ Resources:
       Description: A simple example includes a HTTP get method to get all items from a
         DynamoDB table.
       Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        # Give Create/Read/Update/Delete Permissions to the StudentsTable
         - DynamoDBCrudPolicy:
-            TableName: !Ref SampleTable
+            TableName: !Ref StudentsTable
       Environment:
         Variables:
           # Make table name accessible as environment variable from function code during execution
-          SAMPLE_TABLE: !Ref SampleTable
+          STUDENTS_TABLE: !Ref StudentsTable
       Events:
         Api:
           Type: Api
@@ -125,13 +125,13 @@ Resources:
       Description: A simple example includes a HTTP get method to get one item by id
         from a DynamoDB table.
       Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        # Give Create/Read/Update/Delete Permissions to the StudentsTable
         - DynamoDBCrudPolicy:
-            TableName: !Ref SampleTable
+            TableName: !Ref StudentsTable
       Environment:
         Variables:
           # Make table name accessible as environment variable from function code during execution
-          SAMPLE_TABLE: !Ref SampleTable
+          STUDENTS_TABLE: !Ref StudentsTable
       Events:
         Api:
           Type: Api
@@ -153,13 +153,13 @@ Resources:
       Description: A simple example includes a HTTP post method to add one item to a
         DynamoDB table.
       Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        # Give Create/Read/Update/Delete Permissions to the StudentsTable
         - DynamoDBCrudPolicy:
-            TableName: !Ref SampleTable
+            TableName: !Ref StudentsTable
       Environment:
         Variables:
           # Make table name accessible as environment variable from function code during execution
-          SAMPLE_TABLE: !Ref SampleTable
+          STUDENTS_TABLE: !Ref StudentsTable
       Events:
         Api:
           Type: Api
@@ -172,11 +172,11 @@ Resources:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 
   # DynamoDB table to store item: {id: &lt;ID&gt;, name: &lt;NAME&gt;}
-  SampleTable:
+  StudentsTable:
     Type: AWS::Serverless::SimpleTable
     Properties:
       PrimaryKey:
-        Name: id
+        Name: home_email
         Type: String
       ProvisionedThroughput:
         ReadCapacityUnits: 2
