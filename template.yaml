@@ -61,7 +61,7 @@ Resources:
       Name: com.apigw
       Scopes:
         - ScopeDescription: scope_description
-          ScopeName: scope_name
+          ScopeName: scope1
       UserPoolId: !Ref CognitoAuthorizerUserPool
 
   CognitoAuthorizerUserPoolDomain:
@@ -69,11 +69,22 @@ Resources:
     Properties:
       Domain: !Sub user-pool-domain-${AWS::AccountId}
       UserPoolId: !Ref CognitoAuthorizerUserPool
-      # Each Lambda function is defined by properties:
-      # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
+  BackgroundChecksAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        DefaultAuthorizer: MyCognitoAuth
+        Authorizers:
+          MyCognitoAuth:
+            UserPoolArn: !GetAtt CognitoAuthorizerUserPool.Arn
+            AuthorizationScopes:
+              - com.apigw/scope1
 
-      # This is a Lambda function config associated with the source code: get-all-items.js
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  # This is a Lambda function config associated with the source code: get-all-items.js
   getAllItemsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -99,6 +110,7 @@ Resources:
           Properties:
             Path: /
             Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
 
   # This is a Lambda function config associated with the source code: get-by-id.js
   getByIdFunction:
@@ -126,6 +138,7 @@ Resources:
           Properties:
             Path: /{id}
             Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
 
   # This is a Lambda function config associated with the source code: put-item.js
   putItemFunction:
@@ -153,6 +166,7 @@ Resources:
           Properties:
             Path: /
             Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
 
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
@@ -171,7 +185,7 @@ Resources:
 Outputs:
   WebEndpoint:
     Description: API Gateway endpoint URL for Prod stage
-    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+    Value: !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod/
 
   HostedUi:
     Description: Hosted UI
