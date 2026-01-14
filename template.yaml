@@ -72,7 +72,8 @@ Resources:
   BackgroundChecksAPI:
     Type: AWS::Serverless::Api
     Properties:
-      StageName: Prod
+      Description: Background checks API for quaid.ai - verify legitimacy of admissions and financial aid applications.
+      StageName: v1
       Auth:
         DefaultAuthorizer: MyCognitoAuth
         Authorizers:
@@ -93,7 +94,7 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: Create/update demographic information for a student.
+      Description: Create, read, update and delete student data.
       Policies:
         # Give Create/Read/Update/Delete Permissions to the StudentsTable
         - DynamoDBCrudPolicy:
@@ -103,12 +104,24 @@ Resources:
           # Make table name accessible as environment variable from function code during execution
           STUDENTS_TABLE: !Ref StudentsTable
       Events:
-        Api:
+        Create:
           Type: Api
           Properties:
-            Path: /
+            Path: /students
             Method: POST
             RestApiId: !Ref BackgroundChecksAPI
+
+        Read:
+          Type: Api
+          Properties:
+            Path: /students
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            RequestParameters:
+              - method.request.querystring.email:
+                  Required: false
+                  Caching: false
+
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -133,7 +146,7 @@ Resources:
 Outputs:
   WebEndpoint:
     Description: API Gateway endpoint URL for Prod stage
-    Value: !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+    Value: !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/v1/
 
   HostedUi:
     Description: Hosted UI

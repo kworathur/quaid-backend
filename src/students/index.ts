@@ -1,5 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBClient,
+  GetItemCommand,
+  ScanCommand,
+} from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
@@ -22,16 +26,56 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   // All log statements are written to CloudWatch
   console.info('received:', event);
-  // send verification email
+  var params;
   switch (event.httpMethod) {
+    case 'GET':
+      try {
+        if (event?.queryStringParameters?.email) {
+          const email = event?.queryStringParameters?.email;
+          params = {
+            TableName: tableName,
+            Key: {
+              email: {
+                S: email,
+              },
+            },
+          };
+          const data = await ddbDocClient.send(new GetItemCommand(params));
+          if (data?.Item) {
+            return {
+              statusCode: 200,
+              body: JSON.stringify(data?.Item),
+            };
+          } else {
+            return {
+              statusCode: 404,
+              body: JSON.stringify({
+                error: `Student with email ${email} not found`,
+              }),
+            };
+          }
+        } else {
+          params = {
+            TableName: tableName,
+          };
+          const data = await ddbDocClient.send(new ScanCommand(params));
+          if (data?.Items) {
+            return {
+              statusCode: 302,
+              body: JSON.stringify({
+                items: data?.Items,
+              }),
+            };
+          }
+        }
+      } catch {}
+
     case 'POST':
       if (!event.body) {
         throw new Error(`Request is missing required body.`);
       }
 
       try {
-        // query parameters
-        var params;
         const body = Student.parse(JSON.parse(event.body));
 
         const email = body.email;
@@ -52,7 +96,7 @@ export const handler = async (
             return {
               statusCode: 302,
               body: JSON.stringify({
-                url: encodeURI(`/api/v1/students?email=${data.Item.email.S}`),
+                url: encodeURI(`/students?email=${data.Item.email.S}`),
               }),
             };
           }
@@ -69,8 +113,8 @@ export const handler = async (
         const name = body.name;
         const level_of_study = body.level_of_study;
         const ssn = body.ssn;
-        // Creates a new item, or replaces an old item with a new item
-        // https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB/DocumentClient.html#put-property
+
+        // create a new student
 
         try {
           params = {
@@ -79,7 +123,6 @@ export const handler = async (
           };
 
           const data = await ddbDocClient.send(new PutCommand(params));
-          console.log('Success - item added or updated', data);
         } catch (err) {
           console.log('Error', (err as any).stack);
           return {
@@ -90,7 +133,9 @@ export const handler = async (
 
         const response: APIGatewayProxyResult = {
           statusCode: 201,
-          body: JSON.stringify({ status: 'CREATED' }),
+          body: JSON.stringify({
+            url: encodeURI(`/students?email=${body.email}`),
+          }),
         };
 
         // All log statements are written to CloudWatch
