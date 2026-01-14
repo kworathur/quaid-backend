@@ -20,7 +20,6 @@ Parameters:
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 
 Resources:
-
   CognitoAuthorizerUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -73,7 +72,8 @@ Resources:
   BackgroundChecksAPI:
     Type: AWS::Serverless::Api
     Properties:
-      StageName: Prod
+      Description: Background checks API for quaid.ai - verify legitimacy of admissions and financial aid applications.
+      StageName: v1
       Auth:
         DefaultAuthorizer: MyCognitoAuth
         Authorizers:
@@ -84,99 +84,60 @@ Resources:
 
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-  # This is a Lambda function config associated with the source code: get-all-items.js
-  getAllItemsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/handlers/get-all-items.getAllItemsHandler
-      Runtime: nodejs20.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 100
-      Description: A simple example includes a HTTP get method to get all items from a
-        DynamoDB table.
-      Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref SampleTable
-      Environment:
-        Variables:
-          # Make table name accessible as environment variable from function code during execution
-          SAMPLE_TABLE: !Ref SampleTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /
-            Method: GET
-            RestApiId: !Ref BackgroundChecksAPI
 
-  # This is a Lambda function config associated with the source code: get-by-id.js
-  getByIdFunction:
+  putStudentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/get-by-id.getByIdHandler
+      Handler: src/students/index.handler
       Runtime: nodejs20.x
       Architectures:
         - x86_64
       MemorySize: 128
       Timeout: 100
-      Description: A simple example includes a HTTP get method to get one item by id
-        from a DynamoDB table.
+      Description: Create, read, update and delete student data.
       Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        # Give Create/Read/Update/Delete Permissions to the StudentsTable
         - DynamoDBCrudPolicy:
-            TableName: !Ref SampleTable
+            TableName: !Ref StudentsTable
       Environment:
         Variables:
           # Make table name accessible as environment variable from function code during execution
-          SAMPLE_TABLE: !Ref SampleTable
+          STUDENTS_TABLE: !Ref StudentsTable
       Events:
-        Api:
+        Create:
           Type: Api
           Properties:
-            Path: /{id}
-            Method: GET
-            RestApiId: !Ref BackgroundChecksAPI
-
-  # This is a Lambda function config associated with the source code: put-item.js
-  putItemFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/handlers/put-item.putItemHandler
-      Runtime: nodejs20.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 100
-      Description: A simple example includes a HTTP post method to add one item to a
-        DynamoDB table.
-      Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref SampleTable
-      Environment:
-        Variables:
-          # Make table name accessible as environment variable from function code during execution
-          SAMPLE_TABLE: !Ref SampleTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /
+            Path: /students
             Method: POST
             RestApiId: !Ref BackgroundChecksAPI
+
+        Read:
+          Type: Api
+          Properties:
+            Path: /students
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            RequestParameters:
+              - method.request.querystring.email:
+                  Required: false
+                  Caching: false
+
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
 
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 
   # DynamoDB table to store item: {id: &lt;ID&gt;, name: &lt;NAME&gt;}
-  SampleTable:
+  StudentsTable:
     Type: AWS::Serverless::SimpleTable
     Properties:
       PrimaryKey:
-        Name: id
+        Name: email
         Type: String
       ProvisionedThroughput:
         ReadCapacityUnits: 2
@@ -185,7 +146,7 @@ Resources:
 Outputs:
   WebEndpoint:
     Description: API Gateway endpoint URL for Prod stage
-    Value: !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+    Value: !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/v1/
 
   HostedUi:
     Description: Hosted UI
