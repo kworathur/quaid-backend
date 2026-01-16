@@ -1,17 +1,30 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+  AttributeValue,
+} from 'aws-lambda';
 import {
   DynamoDBClient,
   GetItemCommand,
   ScanCommand,
+  ScanCommandInput,
 } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
 import * as z from 'zod';
 
+const DEFAULT_PAGE_SIZE = 25;
 // Get the DynamoDB table name from environment variables
 const tableName = process.env.STUDENTS_TABLE;
+const counterTableName = process.env.COUNTER_TABLE;
+
 const Student = z.object({
+  id: z.int().optional(), // ID will be populated by dynamodb
   email: z.email(),
   address: z.string(),
   birthdate: z.iso.date(),
@@ -19,8 +32,69 @@ const Student = z.object({
   level_of_study: z.enum(['BACHELORS', 'MASTERS', 'DOCTORAL']),
   ssn: z.string().regex(/^[0-9]{9}$/),
 });
-// email address: email address, birthdate, street address, legal name, level of study, SSN
 
+const queryPaginatedDynamoList = async (
+  params: ScanCommandInput,
+  offset: number,
+  limit: number,
+) => {
+  let lastEvaluatedKey = null;
+  let itemsRetrieved = 0;
+  let results: Record<string, AttributeValue>[] = [];
+  let data;
+  while (itemsRetrieved <= offset) {
+    // scan the database for student items
+    data = await ddbDocClient.send(new ScanCommand(params));
+    if (!data?.Count) {
+      throw Error(
+        `Error encountered while retrieving paginated list of students`,
+      );
+    }
+
+    itemsRetrieved += data.Count;
+    offset = Math.max(offset - data.Count, 0);
+
+    if (data.LastEvaluatedKey) {
+      lastEvaluatedKey = data.LastEvaluatedKey['id'].N;
+    }
+  }
+
+  if (!data?.Items) {
+    throw Error(`Query is out of bounds`);
+  }
+
+  // if items count is less than limit and lastEvaluatedKey is not null: keep querying
+  results.concat(
+    data.Items.slice(offset, limit) as ConcatArray<
+      Record<string, AttributeValue>
+    >,
+  );
+  let itemsFound = itemsRetrieved - offset;
+
+  while (itemsFound < limit && lastEvaluatedKey != null) {
+    data = await ddbDocClient.send(
+      new ScanCommand({
+        ...params,
+        Limit: limit - itemsFound,
+        ExclusiveStartKey: { id: { N: lastEvaluatedKey } },
+      }),
+    );
+
+    if (!data?.Count) {
+      throw Error(
+        `Error encountered while retrieving paginated list of students`,
+      );
+    }
+    itemsFound += data.Count;
+    offset = Math.max(offset - data.Count, 0);
+
+    if (data.LastEvaluatedKey) {
+      lastEvaluatedKey = data.LastEvaluatedKey['id'].N;
+    }
+  }
+};
+
+// email address: email address, birthdate, street address, legal name, level of study, SSN
 export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
@@ -30,45 +104,34 @@ export const handler = async (
   switch (event.httpMethod) {
     case 'GET':
       try {
-        if (event?.queryStringParameters?.email) {
-          const email = event?.queryStringParameters?.email;
-          params = {
-            TableName: tableName,
-            Key: {
-              email: {
-                S: email,
-              },
-            },
+        // return a paginated list of students
+        const offset = event?.queryStringParameters?.page
+          ? +event.queryStringParameters.page
+          : 0;
+        const limit =
+          event?.queryStringParameters?.pageSize || DEFAULT_PAGE_SIZE;
+        params = {
+          TableName: tableName,
+        };
+        const students = queryPaginatedDynamoList(params, offset, limit);
+
+        const data = await ddbDocClient.send(new ScanCommand(params));
+        if (data?.Items) {
+          return {
+            statusCode: 302,
+            body: JSON.stringify({
+              items: data?.Items,
+            }),
           };
-          const data = await ddbDocClient.send(new GetItemCommand(params));
-          if (data?.Item) {
-            return {
-              statusCode: 200,
-              body: JSON.stringify(data?.Item),
-            };
-          } else {
-            return {
-              statusCode: 404,
-              body: JSON.stringify({
-                error: `Student with email ${email} not found`,
-              }),
-            };
-          }
-        } else {
-          params = {
-            TableName: tableName,
-          };
-          const data = await ddbDocClient.send(new ScanCommand(params));
-          if (data?.Items) {
-            return {
-              statusCode: 302,
-              body: JSON.stringify({
-                items: data?.Items,
-              }),
-            };
-          }
         }
-      } catch {}
+      } catch {
+        return {
+          statusCode: 500,
+          body: JSON.stringify({
+            message: 'Internal server error',
+          }),
+        };
+      }
 
     case 'POST':
       if (!event.body) {
@@ -96,7 +159,7 @@ export const handler = async (
             return {
               statusCode: 302,
               body: JSON.stringify({
-                url: encodeURI(`/students?email=${data.Item.email.S}`),
+                url: encodeURI(`/students/${data.Item.id.S}`),
               }),
             };
           }
@@ -115,28 +178,61 @@ export const handler = async (
         const ssn = body.ssn;
 
         // create a new student
-
+        let response: APIGatewayProxyResult;
         try {
+          // use an auto-increment for now, later the student ID will come from banner
+
+          const data = await ddbDocClient.send(
+            new UpdateCommand({
+              TableName: counterTableName,
+              Key: { counter: { S: 'studentCounter' } },
+              ReturnValues: 'UPDATED_NEW',
+              ExpressionAttributeNames: {
+                '#cnt': 'count',
+              },
+              ExpressionAttributeValues: {
+                ':val': 1,
+              },
+              UpdateExpression: 'ADD #cnt :val',
+            }),
+          );
+          if (!data?.Attributes) {
+            return {
+              statusCode: 500,
+              body: JSON.stringify({
+                message: 'Failed to create a new student',
+              }),
+            };
+          }
+          const nextStudentId = data?.Attributes.count;
           params = {
             TableName: tableName,
-            Item: { email, birthdate, address, name, level_of_study, ssn },
+            Item: {
+              id: nextStudentId,
+              email,
+              birthdate,
+              address,
+              name,
+              level_of_study,
+              ssn,
+            },
           };
 
-          const data = await ddbDocClient.send(new PutCommand(params));
+          await ddbDocClient.send(new PutCommand(params));
+
+          response = {
+            statusCode: 201,
+            body: JSON.stringify({
+              url: encodeURI(`/students/${body.id}`),
+            }),
+          };
         } catch (err) {
           console.log('Error', (err as any).stack);
-          return {
+          response = {
             statusCode: 400,
             body: JSON.stringify({ error: (err as any).stack }),
           };
         }
-
-        const response: APIGatewayProxyResult = {
-          statusCode: 201,
-          body: JSON.stringify({
-            url: encodeURI(`/students?email=${body.email}`),
-          }),
-        };
 
         // All log statements are written to CloudWatch
         console.info(
