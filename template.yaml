@@ -85,7 +85,7 @@ Resources:
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
-  putStudentFunction:
+  crudStudentFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: src/students/index.handler
@@ -110,6 +110,7 @@ Resources:
             Path: /students
             Method: POST
             RestApiId: !Ref BackgroundChecksAPI
+            RequestModel:
 
         Read:
           Type: Api
@@ -117,10 +118,6 @@ Resources:
             Path: /students
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
-            RequestParameters:
-              - method.request.querystring.email:
-                  Required: false
-                  Caching: false
 
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
