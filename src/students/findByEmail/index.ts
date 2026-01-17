@@ -9,7 +9,6 @@ const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
 import * as z from 'zod';
 
-const DEFAULT_PAGE_SIZE = 25;
 // Get the DynamoDB table name from environment variables
 const tableName = process.env.STUDENTS_TABLE;
 const Student = z.object({
@@ -60,14 +59,14 @@ export const handler = async (
           return {
             statusCode: 400,
             body: JSON.stringify({
-              error: `query parameter email is required`,
+              error: `query parameter "email" is required`,
             }),
           };
         }
       } catch {}
     default:
       throw new Error(
-        `Unsupported method : ${event.httpMethod}. Accepted methods are POST`,
+        `Unsupported method : ${event.httpMethod}. Accepted methods are GET`,
       );
   }
 };

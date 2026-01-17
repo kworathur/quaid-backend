@@ -17,6 +17,7 @@ import {
 const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
 import * as z from 'zod';
+import { queryPaginatedDynamoList } from '../lib/paginationUtils';
 
 const DEFAULT_PAGE_SIZE = 25;
 // Get the DynamoDB table name from environment variables
@@ -32,90 +33,6 @@ const Student = z.object({
   level_of_study: z.enum(['BACHELORS', 'MASTERS', 'DOCTORAL']),
   ssn: z.string().regex(/^[0-9]{9}$/),
 });
-
-const queryPaginatedDynamoList = async (
-  params: ScanCommandInput,
-  offset: number,
-  limit: number,
-): Promise<Record<string, AttributeValue>[]> => {
-  let lastEvaluatedKey: number | null = null;
-  let itemsRetrieved = 0;
-  let results: Record<string, AttributeValue>[] = [];
-  let data;
-  while (itemsRetrieved < offset) {
-    // scan the database for student items
-    data = await ddbDocClient.send(
-      new ScanCommand({
-        ...params,
-        ...(lastEvaluatedKey != null && {
-          ExclusiveStartKey: {
-            id: { N: lastEvaluatedKey?.toString() as string },
-          },
-        }),
-      }),
-    );
-
-    if (data?.Count == undefined || data?.Items == undefined) {
-      console.error(
-        `query returned no results: offset ${offset} out of bounds`,
-      );
-      return [];
-    }
-
-    itemsRetrieved += data.Count;
-
-    if (data.LastEvaluatedKey) {
-      lastEvaluatedKey = data.LastEvaluatedKey['id'].N
-        ? +data.LastEvaluatedKey['id'].N
-        : null;
-    }
-  }
-
-  if (data?.Items == undefined) {
-    console.error(`query returned no results: offset ${offset} out of bounds`);
-    return [];
-  }
-
-  offset = itemsRetrieved - offset;
-
-  // if items count is less than limit and lastEvaluatedKey is not null: keep querying
-  results.concat(
-    data.Items.slice(offset, limit) as ConcatArray<
-      Record<string, AttributeValue>
-    >,
-  );
-  let itemsFound = results.length;
-
-  while (itemsFound < limit && lastEvaluatedKey != null) {
-    data = await ddbDocClient.send(
-      new ScanCommand({
-        ...params,
-        Limit: limit - itemsFound,
-        ...(lastEvaluatedKey != null && {
-          ExclusiveStartKey: {
-            id: { N: lastEvaluatedKey?.toString() as string },
-          },
-        }),
-      }),
-    );
-
-    if (data?.Count == undefined || data?.Items == undefined) {
-      console.error(
-        `query returned no results: offset ${offset} out of bounds`,
-      );
-      return results;
-    }
-    itemsFound += data.Count;
-
-    if (data.LastEvaluatedKey) {
-      lastEvaluatedKey = data.LastEvaluatedKey['id'].N
-        ? +data.LastEvaluatedKey['id'].N
-        : null;
-    }
-  }
-
-  return results;
-};
 
 // email address: email address, birthdate, street address, legal name, level of study, SSN
 export const handler = async (
@@ -137,17 +54,26 @@ export const handler = async (
         params = {
           TableName: tableName,
         };
-        const students = queryPaginatedDynamoList(params, offset, limit);
 
-        const data = await ddbDocClient.send(new ScanCommand(params));
-        if (data?.Items) {
-          return {
-            statusCode: 302,
-            body: JSON.stringify({
-              items: data?.Items,
-            }),
-          };
-        }
+        const students = queryPaginatedDynamoList(
+          ddbDocClient,
+          params,
+          offset,
+          limit,
+        );
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            items: students,
+            prev: encodeURI(
+              `/students?offset=${Math.max(offset - limit, 0)}&limit=${limit}`,
+            ),
+            next: encodeURI(
+              `/students?offset=${Math.max(offset + limit, 0)}&limit=${limit}`,
+            ),
+          }),
+        };
       } catch {
         return {
           statusCode: 500,
