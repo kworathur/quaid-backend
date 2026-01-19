@@ -103,6 +103,7 @@ Resources:
         Variables:
           # Make table name accessible as environment variable from function code during execution
           STUDENTS_TABLE: !Ref StudentsTable
+          COUNTER_TABLE: !Ref CounterTable
       Events:
         Create:
           Type: Api
@@ -110,7 +111,6 @@ Resources:
             Path: /students
             Method: POST
             RestApiId: !Ref BackgroundChecksAPI
-            RequestModel:
 
         Read:
           Type: Api
@@ -134,7 +134,17 @@ Resources:
     Type: AWS::Serverless::SimpleTable
     Properties:
       PrimaryKey:
-        Name: email
+        Name: id
+        Type: Number
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  CounterTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: counter
         Type: String
       ProvisionedThroughput:
         ReadCapacityUnits: 2
