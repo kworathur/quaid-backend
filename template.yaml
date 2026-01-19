@@ -97,7 +97,7 @@ Resources:
     Properties:
       DomainName: !Ref CustomDomain
       RestApiId: !Ref BackgroundChecksAPI
-      BasePath: ''
+      Stage: v1
 
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
