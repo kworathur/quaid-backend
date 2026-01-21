@@ -4,23 +4,12 @@ import {
   GetItemCommand,
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
-import * as z from 'zod';
 
 // Get the DynamoDB table name from environment variables
 const tableName = process.env.STUDENTS_TABLE;
-const Student = z.object({
-  id: z.string().optional(), // ID will be populated by dynamodb
-  email: z.email(),
-  address: z.string(),
-  birthdate: z.iso.date(),
-  name: z.string(),
-  level_of_study: z.enum(['BACHELORS', 'MASTERS', 'DOCTORAL']),
-  ssn: z.string().regex(/^[0-9]{9}$/),
-});
-// email address: email address, birthdate, street address, legal name, level of study, SSN
 
 export const handler = async (
   event: APIGatewayProxyEvent,

@@ -4,142 +4,142 @@ info:
   description: |-
     Background checks API for quaid.ai - verify legitimacy of admissions and financial aid applications.
 
-    Features:
-    - Verify legitimacy of student email addresses and mailing addresses
   version: 0.1.0
-# servers:
-#   - url: https://petstore31.swagger.io/api/v3
+servers:
+  - url: https://api.quaid-ai.com
 tags:
   - name: student
-    description: Operations defined on students
+    description: Student data import and queries
   - name: check
-    description: Supported background checks by the API.
+    description: Background checks on student and their financial aid applications.
 paths:
-  /student:
-    put:
-      tags:
-        - student
-      summary: Update an existing student.
-      description: Update an existing student by Id. If the student is changing their email, the new email must not be in use by another student and the email must be re-verified.
-      operationId: updateStudent
-      requestBody:
-        description: Update an existing student
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Student'
-          application/xml:
-            schema:
-              $ref: '#/components/schemas/Student'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Student'
-        required: true
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Student'
-            application/xml:
-              schema:
-                $ref: '#/components/schemas/Student'
-        '400':
-          description: Invalid ID supplied
-        '404':
-          description: Pet not found
-        '422':
-          description: Validation exception
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - petstore_auth:
-            - write:pets
-            - read:pets
-    post:
-      tags:
-        - pet
-      summary: Add a new pet to the store.
-      description: Add a new pet to the store.
-      operationId: addPet
-      requestBody:
-        description: Create a new pet in the store
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Student'
-          application/xml:
-            schema:
-              $ref: '#/components/schemas/Student'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Student'
-        required: true
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Student'
-            application/xml:
-              schema:
-                $ref: '#/components/schemas/Student'
-        '400':
-          description: Invalid input
-        '422':
-          description: Validation exception
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - petstore_auth:
-            - write:pets
-            - read:pets
-  /student/findByEmail:
+  /students:
     get:
       tags:
         - student
-      summary: Finds Students by Email.
-      description: Multiple status values can be provided with comma separated strings.
-      operationId: findPetsByStatus
+      summary: Get a paginated list of students
+      operationId: listStudents
       parameters:
-        - name: status
-          in: query
-          description: Status values that need to be considered for filter
+        - in: query
+          name: offset
+          description: offset for retreiving search results
           required: false
-          explode: true
+          schema:
+            type: integer
+            format: int64
+            example: 5
+            minimum: 0
+
+        - in: query
+          name: limit
+          description: number of results per page
+          required: false
+          schema:
+            type: integer
+            format: int64
+            example: 25
+            minimum: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/requestBodies/Student'
+                  pagination:
+                    type: object
+                    properties:
+                      offset:
+                        type: number
+                        description: the offset passed in query parameters for this request.
+                        required: true
+                      limit:
+                        type: number
+                        description: the limit passed in the query parameters for this request.
+                        required: true
+                      totalItems:
+                        type: number
+                        description: the total number of items matching this query
+                        required: true
+                      totalPages:
+                        type: number
+                        description: the total number of pages matching this query
+                        required: true
+                      currentPage:
+                        type: number
+                        description:
+                        schema:
+                          type: integer
+                          format: int64
+                          example: 5
+                          minimum: 1
+
+        #                 "pagination": {
+        #   "offset": 20,
+        #   "limit": 10,
+        #   "totalItems": 5000, // Total number of items available
+        #   "totalPages": 500, // Calculated as ceil(totalItems / limit)
+        #   "currentPage": 3 // Calculated as (offset / limit) + 1
+        # },
+        # "links": { // HATEOAS links for navigation
+        #   "self": "/items?offset=20&limit=10",
+        #   "first": "/items?offset=0&limit=10",
+        #   "prev": "/items?offset=10&limit=10", // Null if on the first page
+        #   "next": "/items?offset=30&limit=10", // Null if on the last page
+        #   "last": "/items?offset=4990&limit=10"
+        # }
+        # prev:
+        #   type: string
+        #   description: URI of previous page of results
+        # next:
+        #   type: string
+        #   description: URI of next page of results
+
+        '400':
+          description: Invalid ID supplied
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - api_auth:
+            - write:students
+            - read:students
+
+  /students/findByEmail:
+    get:
+      tags:
+        - student
+      summary: Find a student by email
+      description: Multiple status values can be provided with comma separated strings.
+      operationId: findstudentsByStatus
+      parameters:
+        - in: query
+          name: email
+          description: Email of the student to retrieve
+          required: true
           schema:
             type: string
-            default: available
-            enum:
-              - available
-              - pending
-              - sold
       responses:
         '200':
           description: successful operation
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Student'
-            application/xml:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Student'
+                $ref: '#/components/requestBodies/Student'
+        '404':
+          description: Student with provided email not found
+
         '400':
-          description: Invalid status value
+          description: Missing query parameter 'email'
+
         default:
           description: Unexpected error
           content:
@@ -147,20 +147,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security:
-        - petstore_auth:
-            - write:pets
-            - read:pets
-  /student/{studentId}:
+        - api_auth:
+            - write:students
+            - read:students
+  /students/{studentId}:
     get:
       tags:
-        - pet
-      summary: Find pet by identifier.
-      description: Returns a single pet.
-      operationId: getPetById
+        - student
+      summary: Find student by identifier.
+      description: Returns a single student.
+      operationId: getStudentById
       parameters:
-        - name: petId
+        - name: studentId
           in: path
-          description: ID of pet to return
+          description: ID of student to return
           required: true
           schema:
             type: integer
@@ -171,14 +171,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Student'
-            application/xml:
-              schema:
-                $ref: '#/components/schemas/Student'
-        '400':
-          description: Invalid ID supplied
+                $ref: '#/components/requestBodies/Student'
         '404':
-          description: Pet not found
+          description: Student not found with provided ID
         default:
           description: Unexpected error
           content:
@@ -187,33 +182,24 @@ paths:
                 $ref: '#/components/schemas/Error'
       security:
         - api_key: []
-        - petstore_auth:
-            - write:pets
-            - read:pets
-    post:
+        - api_auth:
+            - write:students
+            - read:students
+    put:
       tags:
-        - pet
-      summary: Updates a pet in the store with form data.
-      description: update a pet via the form data.
-      operationId: updatePetWithForm
+        - student
+      summary: Updates a student with form data.
+      description: update a student's verification status with form data.
+      operationId: updateStudentWithForm
       parameters:
-        - name: petId
+        - name: studentId
           in: path
-          description: ID of pet that needs to be updated
+          description: ID of student that needs to be updated
           required: true
           schema:
             type: integer
             format: int64
-        - name: name
-          in: query
-          description: Name of pet that needs to be updated
-          schema:
-            type: string
-        - name: status
-          in: query
-          description: Status of pet that needs to be updated
-          schema:
-            type: string
+
       responses:
         '200':
           description: successfully updated
@@ -226,9 +212,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security:
-        - petstore_auth:
-            - write:pets
-            - read:pets
+        - api_auth:
+            - write:students
+            - read:students
     delete:
       tags:
         - pet
@@ -261,10 +247,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security:
-        - petstore_auth:
-            - write:pets
-            - read:pets
-  /student/{studentId}/verifyEmail:
+        - api_auth:
+            - write:students
+            - read:students
+  /students/{studentId}/verifyEmail:
     post:
       tags:
         - pet
@@ -305,9 +291,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security:
-        - petstore_auth:
-            - write:pets
-            - read:pets
+        - api_auth:
+            - write:students
+            - read:students
 
 components:
   schemas:
@@ -322,20 +308,20 @@ components:
       properties:
         email:
           type: string
-          examples: [kworathur@odu.edu]
+          examples: [kworathur3@gatech.edu]
         address:
           type: string
           examples: ['123 Cherry St., Atlanta GA, 30309']
         birthdate:
           type: string
           examples: ['2002-04-12']
-        status:
+        level_of_study:
           type: string
-          description: pet status in the store
+          description: student level of study
           enum:
-            - available
-            - pending
-            - sold
+            - BACHELORS
+            - MASTERS
+            - DOCTORAL
     ApiResponse:
       type: object
       properties:
@@ -349,41 +335,37 @@ components:
     Error:
       type: object
       properties:
-        code:
-          type: string
         message:
           type: string
+          description: A description of the error
       required:
         - code
         - message
   requestBodies:
-    Pet:
-      description: Pet object that needs to be added to the store
+    Student:
+      description: Students for running background checks on
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Student'
-        application/xml:
-          schema:
-            $ref: '#/components/schemas/Student'
-    UserArray:
-      description: List of user object
+            $ref: '#/components/requestBodies/Student'
+    StudentArray:
+      description: List of student objects
       content:
         application/json:
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/Student'
+              $ref: '#/components/requestBodies/Student'
   securitySchemes:
-    petstore_auth:
+    api_auth:
       type: oauth2
       flows:
         implicit:
-          authorizationUrl: https://petstore3.swagger.io/oauth/authorize
+          authorizationUrl: https://user-pool-domain-705948898164.auth.us-east-1.amazoncognito.com/oauth2/authorize
           scopes:
-            'write:pets': modify pets in your account
-            'read:pets': read your pets
-    api_key:
-      type: apiKey
-      name: api_key
-      in: header
+            'write:students': modify students in your account
+            'read:students': read your students
+    # api_key:
+    #   type: apiKey
+    #   name: api_key
+    #   in: header

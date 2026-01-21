@@ -16,6 +16,9 @@ Parameters:
     Type: String
   CallbackUrl:
     Type: String
+  CertificateArn:
+    Type: String
+    Description: ARN of SSL/TLS certificate in Amazon Certificate Manager (ensure that cert is valid for the region in which resources are deployed)
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 
@@ -74,6 +77,7 @@ Resources:
     Properties:
       Description: Background checks API for quaid.ai - verify legitimacy of admissions and financial aid applications.
       StageName: v1
+      DisableExecuteApiEndpoint: true
       Auth:
         DefaultAuthorizer: MyCognitoAuth
         Authorizers:
@@ -81,6 +85,19 @@ Resources:
             UserPoolArn: !GetAtt CognitoAuthorizerUserPool.Arn
             AuthorizationScopes:
               - com.apigw/scope1
+
+  CustomDomain:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      CertificateArn: !Ref CertificateArn
+      DomainName: api.quaid-ai.com
+
+  BaseMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Properties:
+      DomainName: !Ref CustomDomain
+      RestApiId: !Ref BackgroundChecksAPI
+      Stage: v1
 
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction

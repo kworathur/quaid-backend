@@ -31,7 +31,10 @@ const Student = z.object({
   birthdate: z.iso.date(),
   name: z.string(),
   level_of_study: z.enum(['BACHELORS', 'MASTERS', 'DOCTORAL']),
-  ssn: z.string().regex(/^[0-9]{9}$/),
+  ssn: z
+    .string()
+    .regex(/^[0-9]{9}$/)
+    .optional(),
 });
 
 // email address: email address, birthdate, street address, legal name, level of study, SSN
@@ -55,13 +58,14 @@ export const handler = async (
           TableName: tableName,
         };
 
+        // TODO: check boundaries of page and offset
         const students = queryPaginatedDynamoList(
           ddbDocClient,
           params,
           offset,
           limit,
         );
-
+        // TODO: research the properties a paginated response should have
         return {
           statusCode: 200,
           body: JSON.stringify({
@@ -107,7 +111,7 @@ export const handler = async (
           if (data?.Item) {
             console.log('Found student ', data.Item);
             return {
-              statusCode: 302,
+              statusCode: 409,
               body: JSON.stringify({
                 url: encodeURI(`/students/${data.Item.id.S}`),
               }),
