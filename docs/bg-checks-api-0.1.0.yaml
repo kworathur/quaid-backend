@@ -12,7 +12,7 @@ info:
       - Integrate with student resources in SIS to automatically place holds on registration
       - Uses multiple datapoints for background checks - address liveness, program of study sanity checks, ML-model scoring
   version: 0.1.0
-  documentationUrl: 'https://api.quaid-ai.com/docs'
+
 servers:
   - url: https://api.quaid-ai.com
 tags:
@@ -203,8 +203,7 @@ paths:
       tags:
         - student
       summary: Send a verification email with a one-time password to a student.
-      description: Verification must be completed by calling this endpoint with authCode query parameter with the correct .
-      operationId: verifyEmail
+      operationId: sendVerficationEmail
       parameters:
         - name: studentId
           in: path
@@ -214,13 +213,6 @@ paths:
             type: integer
             format: int64
             example: 55
-        - name: authCode
-          in: query
-          description: OTP to submit for verification
-          required: false
-          schema:
-            type: string
-            pattern: /^\d{6}$/
       requestBody:
         content:
           application/octet-stream:
@@ -239,6 +231,8 @@ paths:
                     type: string
                     required: true
                     example: 'success'
+        '404':
+          description: student with provided email ID not found
 
         default:
           description: Unexpected error
@@ -250,6 +244,49 @@ paths:
         - api_auth:
             - write:students
             - read:students
+    get:
+      tags:
+        - student
+      summary: Validate a verification code sent to a student's email.
+      operationId: validateEmailToken
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to update
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
+        - name: authCode
+          in: query
+          description: OTP to submit for verification
+          required: false
+          schema:
+            type: string
+            pattern: /^\d{6}$/
+      responses:
+      '200':
+        description: successful operation
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  required: true
+                  example: 'success'
+      default:
+        description: Unexpected error
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Error'
+    security:
+      - api_auth:
+          - write:students
+          - read:students
 
 components:
   schemas:
@@ -261,13 +298,11 @@ components:
         offset:
           type: integer
           description: the offset passed in query parameters for this request.
-          required: true
           example: 5
 
         limit:
           type: integer
           description: the limit passed in the query parameters for this request.
-          required: true
           example: 25
 
         totalItems:
@@ -278,41 +313,43 @@ components:
         totalPages:
           type: integer
           description: the total number of pages matching this query
-          required: true
           example: 500
-          schema:
-            minimum: 1
+          minimum: 1
         currentPage:
           type: integer
           description: the current page of search results
           example: 3
-          schema:
-            minimum: 1
+          minimum: 1
     PaginationLinks:
       type: object
       description: HATEOAS links to first, previous, next, and last pages
+      required:
+        - self
+        - first
+        - prev
+        - next
+        - last
       properties:
         self:
           type: string
-          required: true
-          example: /items?offset=20&limit=10
 
+          example: /items?offset=20&limit=10
         first:
           type: string
-          required: true
+
           example: /items?offset=0&limit=10
 
         prev:
           type: string
-          required: true
+
           example: /items?offset=10&limit=10
         next:
           type: string
-          required: true
+
           example: /items?offset=30&limit=10
         last:
           type: string
-          required: true
+
           example: /items?offset=4990&limit=1
     VerficationStatus:
       type: string
@@ -332,7 +369,6 @@ components:
       properties:
         studentId:
           type: integer
-          required: true
           description: Student's unique identifier (Implementation note- currently generated in DynamoDB, later will be foreign keys to SIS database)
 
         email:
@@ -367,11 +403,9 @@ components:
       type: object
       properties:
         status:
-          schema:
-            $ref: '#/components/schemas/Status'
+          $ref: '#/components/schemas/Status'
         statusCode:
-          schema:
-            $ref: '#/components/schemas/StatusCode'
+          $ref: '#/components/schemas/StatusCode'
       required:
         - status
         - statusCode
@@ -380,13 +414,14 @@ components:
       type: object
       properties:
         status:
-          schema:
-            $ref: '#/components/schemas/Status'
+          $ref: '#/components/schemas/Status'
         statusCode:
-          schema:
-            $ref: '#/components/schemas/StatusCode'
+          $ref: '#/components/schemas/StatusCode'
         error:
           type: object
+          required:
+            - code
+            - message
           properties:
             code:
               type: string
@@ -397,38 +432,27 @@ components:
                 - INTERNAL_SEVER_ERROR
             message:
               type: string
-              required: true
               example: The requested resource was not found.
             details:
               type: string
-              required: true
               example: The student with the ID '12345' does not exist in your SIS.
             timestamp:
               type: string
-              required: true
               example: '2023-12-08T12:30:45Z'
             path:
               type: string
-              required: true
               example: /v1/students/55
             suggestion:
               type: string
-              required: true
-              example: Please check if the student ID is correct or refer to the documentation at
-          requestId:
-            type: string
-            required: true
-          documentationUrl:
-            type: string
-            required: true
+              example: Please check if the student ID is correct or refer to the documentation at https://api.quaid-ai.com/docs
+        requestId:
+          type: string
+        documentationUrl:
+          type: string
       required:
         - status
         - statusCode
-        - error.code
-        - error.message
-        - error.details
-        - error.timestamp
-        - error.path
+        - error
   securitySchemes:
     api_auth:
       type: oauth2
