@@ -58,13 +58,14 @@ export const handler = async (
           TableName: tableName,
         };
 
+        // TODO: check boundaries of page and offset
         const students = queryPaginatedDynamoList(
           ddbDocClient,
           params,
           offset,
           limit,
         );
-
+        // TODO: research the properties a paginated response should have
         return {
           statusCode: 200,
           body: JSON.stringify({
