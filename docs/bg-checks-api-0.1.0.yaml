@@ -2,16 +2,24 @@ openapi: 3.1.0
 info:
   title: Background Checks API
   description: |-
-    Background checks API for quaid.ai - verify legitimacy of admissions and financial aid applications.
+    Verify that college applications and need-based aid applications come from real students - not 
+    bad actors. 
 
+    Features:
+      - Integrates with all major student information systems (SIS)
+      - Request-based pricing model
+      - Detect fraud in Free Application for Federal Student Aid (FAFSA) applications
+      - Integrate with student resources in SIS to automatically place holds on registration
+      - Uses multiple datapoints for background checks - address liveness, program of study sanity checks, ML-model scoring
   version: 0.1.0
+  documentationUrl: 'https://api.quaid-ai.com/docs'
 servers:
   - url: https://api.quaid-ai.com
 tags:
   - name: student
-    description: Student data import and queries
+    description: Student metadata for recording student liveness, fraud likelihood
   - name: check
-    description: Background checks on student and their financial aid applications.
+    description: Background checks on students and their financial aid applications.
 paths:
   /students:
     get:
@@ -19,6 +27,7 @@ paths:
         - student
       summary: Get a paginated list of students
       operationId: listStudents
+      description: Implementation noteL later this operation will call SIS APIs for reading student data, for now query data in DynamoDB
       parameters:
         - in: query
           name: offset
@@ -50,58 +59,13 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/requestBodies/Student'
+                      $ref: '#/components/schemas/MockStudent'
                   pagination:
-                    type: object
-                    properties:
-                      offset:
-                        type: number
-                        description: the offset passed in query parameters for this request.
-                        required: true
-                      limit:
-                        type: number
-                        description: the limit passed in the query parameters for this request.
-                        required: true
-                      totalItems:
-                        type: number
-                        description: the total number of items matching this query
-                        required: true
-                      totalPages:
-                        type: number
-                        description: the total number of pages matching this query
-                        required: true
-                      currentPage:
-                        type: number
-                        description:
-                        schema:
-                          type: integer
-                          format: int64
-                          example: 5
-                          minimum: 1
-
-        #                 "pagination": {
-        #   "offset": 20,
-        #   "limit": 10,
-        #   "totalItems": 5000, // Total number of items available
-        #   "totalPages": 500, // Calculated as ceil(totalItems / limit)
-        #   "currentPage": 3 // Calculated as (offset / limit) + 1
-        # },
-        # "links": { // HATEOAS links for navigation
-        #   "self": "/items?offset=20&limit=10",
-        #   "first": "/items?offset=0&limit=10",
-        #   "prev": "/items?offset=10&limit=10", // Null if on the first page
-        #   "next": "/items?offset=30&limit=10", // Null if on the last page
-        #   "last": "/items?offset=4990&limit=10"
-        # }
-        # prev:
-        #   type: string
-        #   description: URI of previous page of results
-        # next:
-        #   type: string
-        #   description: URI of next page of results
-
+                    $ref: '#/components/schemas/PaginationParams'
+                  links:
+                    $ref: '#/components/schemas/PaginationLinks'
         '400':
-          description: Invalid ID supplied
+          description: offset out of bounds
         default:
           description: Unexpected error
           content:
@@ -118,8 +82,8 @@ paths:
       tags:
         - student
       summary: Find a student by email
-      description: Multiple status values can be provided with comma separated strings.
-      operationId: findstudentsByStatus
+      description: Implementation note - currently queries students in DynamoDB, eventually should query data with banner/other SIS APIs
+      operationId: findstudentsByEmail
       parameters:
         - in: query
           name: email
@@ -127,13 +91,14 @@ paths:
           required: true
           schema:
             type: string
+            example: kworathur3@gatech.edu
       responses:
         '200':
           description: successful operation
           content:
             application/json:
               schema:
-                $ref: '#/components/requestBodies/Student'
+                $ref: '#/components/schemas/MockStudent'
         '404':
           description: Student with provided email not found
 
@@ -171,7 +136,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/requestBodies/Student'
+                $ref: '#/components/schemas/MockStudent'
         '404':
           description: Student not found with provided ID
         default:
@@ -181,15 +146,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security:
-        - api_key: []
         - api_auth:
             - write:students
             - read:students
     put:
       tags:
         - student
-      summary: Updates a student with form data.
-      description: update a student's verification status with form data.
+      summary: Update a student's verification status
+      description: update a student's verification status with form data and place a hold on the student's registration if student marked as fraudulent
       operationId: updateStudentWithForm
       parameters:
         - name: studentId
@@ -199,47 +163,31 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: status
+          in: requestBody
+          description: The new verification status of the student
+          schema:
+            type: object
+            properties:
+              status:
+                schema:
+                  $ref: '#/components/schemas/VerficationStatus'
 
       responses:
         '200':
           description: successfully updated
-        '400':
-          description: Invalid input
-        default:
-          description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - api_auth:
-            - write:students
-            - read:students
-    delete:
-      tags:
-        - pet
-      summary: Deletes a pet.
-      description: delete a pet.
-      operationId: deletePet
-      parameters:
-        - name: api_key
-          in: header
-          description: ''
-          required: false
-          schema:
-            type: string
-        - name: petId
-          in: path
-          description: Pet id to delete
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: successful operation
+                $ref: '#/components/schemas/BaseApiResponse'
         '400':
-          description: Invalid pet value
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+
         default:
           description: Unexpected error
           content:
@@ -253,24 +201,26 @@ paths:
   /students/{studentId}/verifyEmail:
     post:
       tags:
-        - pet
-      summary: Send a verification email to a student.
-      description: Sends a verification email to a student with a six-digit code.
+        - student
+      summary: Send a verification email with a one-time password to a student.
+      description: Verification must be completed by calling this endpoint with authCode query parameter with the correct .
       operationId: verifyEmail
       parameters:
-        - name: petId
+        - name: studentId
           in: path
-          description: ID of pet to update
+          description: ID of student to update
           required: true
           schema:
             type: integer
             format: int64
-        - name: additionalMetadata
+            example: 55
+        - name: authCode
           in: query
-          description: Additional Metadata
+          description: OTP to submit for verification
           required: false
           schema:
             type: string
+            pattern: /^\d{6}$/
       requestBody:
         content:
           application/octet-stream:
@@ -283,7 +233,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                type: object
+                properties:
+                  status:
+                    type: string
+                    required: true
+                    example: 'success'
+
         default:
           description: Unexpected error
           content:
@@ -297,7 +253,75 @@ paths:
 
 components:
   schemas:
-    Student:
+    # MockStudent is a placeholder for student data that will later be accessed via SIS
+    # connectors/ REST APIs
+    PaginationParams:
+      type: object
+      properties:
+        offset:
+          type: integer
+          description: the offset passed in query parameters for this request.
+          required: true
+          example: 5
+
+        limit:
+          type: integer
+          description: the limit passed in the query parameters for this request.
+          required: true
+          example: 25
+
+        totalItems:
+          type: integer
+          description: the total number of items matching this query
+          required: true
+          example: 10000
+        totalPages:
+          type: integer
+          description: the total number of pages matching this query
+          required: true
+          example: 500
+          schema:
+            minimum: 1
+        currentPage:
+          type: integer
+          description: the current page of search results
+          example: 3
+          schema:
+            minimum: 1
+    PaginationLinks:
+      type: object
+      description: HATEOAS links to first, previous, next, and last pages
+      properties:
+        self:
+          type: string
+          required: true
+          example: /items?offset=20&limit=10
+
+        first:
+          type: string
+          required: true
+          example: /items?offset=0&limit=10
+
+        prev:
+          type: string
+          required: true
+          example: /items?offset=10&limit=10
+        next:
+          type: string
+          required: true
+          example: /items?offset=30&limit=10
+        last:
+          type: string
+          required: true
+          example: /items?offset=4990&limit=1
+    VerficationStatus:
+      type: string
+      enum:
+        - UNVERIFIED
+        - VERIFIED
+        - NEEDS_REVIEW
+        - FRAUDULENT
+    MockStudent:
       required:
         - email
         - address
@@ -306,6 +330,11 @@ components:
         - level_of_study
       type: object
       properties:
+        studentId:
+          type: integer
+          required: true
+          description: Student's unique identifier (Implementation note- currently generated in DynamoDB, later will be foreign keys to SIS database)
+
         email:
           type: string
           examples: [kworathur3@gatech.edu]
@@ -318,53 +347,98 @@ components:
         level_of_study:
           type: string
           description: student level of study
+          example: BACHELORS
           enum:
             - BACHELORS
             - MASTERS
             - DOCTORAL
-    ApiResponse:
+    Status:
+      type: string
+      required: true
+      enum:
+        - error
+        - success
+    StatusCode:
+      type: integer
+      required: true
+      example: 404
+
+    BaseApiResponse:
       type: object
       properties:
-        code:
-          type: integer
-          format: int32
-        type:
-          type: string
-        message:
-          type: string
+        status:
+          schema:
+            $ref: '#/components/schemas/Status'
+        statusCode:
+          schema:
+            $ref: '#/components/schemas/StatusCode'
+      required:
+        - status
+        - statusCode
+
     Error:
       type: object
       properties:
-        message:
-          type: string
-          description: A description of the error
+        status:
+          schema:
+            $ref: '#/components/schemas/Status'
+        statusCode:
+          schema:
+            $ref: '#/components/schemas/StatusCode'
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RESOURCE_NOT_FOUND
+              enum:
+                - RESOURCE_NOT_FOUND
+                - BAD_REQUEST
+                - INTERNAL_SEVER_ERROR
+            message:
+              type: string
+              required: true
+              example: The requested resource was not found.
+            details:
+              type: string
+              required: true
+              example: The student with the ID '12345' does not exist in your SIS.
+            timestamp:
+              type: string
+              required: true
+              example: '2023-12-08T12:30:45Z'
+            path:
+              type: string
+              required: true
+              example: /v1/students/55
+            suggestion:
+              type: string
+              required: true
+              example: Please check if the student ID is correct or refer to the documentation at
+          requestId:
+            type: string
+            required: true
+          documentationUrl:
+            type: string
+            required: true
       required:
-        - code
-        - message
-  requestBodies:
-    Student:
-      description: Students for running background checks on
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/requestBodies/Student'
-    StudentArray:
-      description: List of student objects
-      content:
-        application/json:
-          schema:
-            type: array
-            items:
-              $ref: '#/components/requestBodies/Student'
+        - status
+        - statusCode
+        - error.code
+        - error.message
+        - error.details
+        - error.timestamp
+        - error.path
   securitySchemes:
     api_auth:
       type: oauth2
       flows:
-        implicit:
+        authorizationCode:
           authorizationUrl: https://user-pool-domain-705948898164.auth.us-east-1.amazoncognito.com/oauth2/authorize
+          tokenUrl: https://user-pool-domain-705948898164.auth.us-east-1.amazoncognito.com/oauth2/token
           scopes:
-            'write:students': modify students in your account
-            'read:students': read your students
+            'write:students': modify students in your SIS instance (only for placing holds)
+            'read:students': read student data from your SIS
     # api_key:
     #   type: apiKey
     #   name: api_key
