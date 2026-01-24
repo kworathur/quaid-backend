@@ -12,7 +12,10 @@ info:
       - Integrate with student resources in SIS to automatically place holds on registration
       - Uses multiple datapoints for background checks - address liveness, program of study sanity checks, ML-model scoring
   version: 0.1.0
-
+security:
+  - oauth2Profiles:
+      - students:write
+      - students:read
 servers:
   - url: https://api.quaid-ai.com
 tags:
@@ -27,7 +30,7 @@ paths:
         - student
       summary: Get a paginated list of students
       operationId: listStudents
-      description: Implementation noteL later this operation will call SIS APIs for reading student data, for now query data in DynamoDB
+      description: Implementation note - later this operation will call SIS APIs for reading student data, for now query data in DynamoDB
       parameters:
         - in: query
           name: offset
@@ -72,10 +75,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      security:
-        - api_auth:
-            - write:students
-            - read:students
 
   /students/findByEmail:
     get:
@@ -87,11 +86,11 @@ paths:
       parameters:
         - in: query
           name: email
-          description: Email of the student to retrieve
           required: true
+          description: Email of the student to retrieve
           schema:
-            type: string
             example: kworathur3@gatech.edu
+
       responses:
         '200':
           description: successful operation
@@ -101,20 +100,23 @@ paths:
                 $ref: '#/components/schemas/MockStudent'
         '404':
           description: Student with provided email not found
-
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '400':
           description: Missing query parameter 'email'
-
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      security:
-        - api_auth:
-            - write:students
-            - read:students
+
   /students/{studentId}:
     get:
       tags:
@@ -145,16 +147,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      security:
-        - api_auth:
-            - write:students
-            - read:students
+
     put:
       tags:
         - student
       summary: Update a student's verification status
       description: update a student's verification status with form data and place a hold on the student's registration if student marked as fraudulent
       operationId: updateStudentWithForm
+      requestBody:
+        description: Update a student's status from UNVERIFIED to VERIFIED
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  description: The new verification status of the student
+                  $ref: '#/components/schemas/VerficationStatus'
+            example:
+              status: VERIFIED
       parameters:
         - name: studentId
           in: path
@@ -163,41 +174,36 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: status
-          in: requestBody
-          description: The new verification status of the student
-          schema:
-            type: object
-            properties:
-              status:
-                schema:
-                  $ref: '#/components/schemas/VerficationStatus'
-
       responses:
         '200':
-          description: successfully updated
+          description: successfully updated student status
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: 'Successfully updated student(id:55) status from UNVERIFIED to VERIFIED'
         '400':
           description: Invalid input
           content:
             application/json:
               schema:
-                type: object
-                properties:
-
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Student ID not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      security:
-        - api_auth:
-            - write:students
-            - read:students
+
   /students/{studentId}/verifyEmail:
     post:
       tags:
@@ -225,25 +231,33 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    required: true
-                    example: 'success'
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: 'Verification email sent successfully to kworathur3@gatech.edu'
+
         '404':
           description: student with provided email ID not found
-
-        default:
-          description: Unexpected error
+        '429':
+          description: sending too many requests
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      security:
-        - api_auth:
-            - write:students
-            - read:students
+              example:
+                status: 'error'
+                statusCode: 429
+                error:
+                  code: 'TOO_MANY_REQUESTS'
+                  message: 'You are sending too many email verification requests. Please try again later'
+        default:
+          description: Unexpected error - email failed to send
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     get:
       tags:
         - student
@@ -261,32 +275,38 @@ paths:
         - name: authCode
           in: query
           description: OTP to submit for verification
-          required: false
+          required: true
           schema:
             type: string
             pattern: /^\d{6}$/
       responses:
-      '200':
-        description: successful operation
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                status:
-                  type: string
-                  required: true
-                  example: 'success'
-      default:
-        description: Unexpected error
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Error'
-    security:
-      - api_auth:
-          - write:students
-          - read:students
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: 'Student email verified succesfully'
+
+        '400':
+          description: invalid student ID or invalid authorization code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                status: 'error'
+                statusCode: '400'
+                message: 'The provided authorization code is invalid.'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
@@ -299,22 +319,10 @@ components:
           type: integer
           description: the offset passed in query parameters for this request.
           example: 5
-
         limit:
           type: integer
           description: the limit passed in the query parameters for this request.
           example: 25
-
-        totalItems:
-          type: integer
-          description: the total number of items matching this query
-          required: true
-          example: 10000
-        totalPages:
-          type: integer
-          description: the total number of pages matching this query
-          example: 500
-          minimum: 1
         currentPage:
           type: integer
           description: the current page of search results
@@ -325,32 +333,18 @@ components:
       description: HATEOAS links to first, previous, next, and last pages
       required:
         - self
-        - first
         - prev
         - next
-        - last
       properties:
         self:
           type: string
-
           example: /items?offset=20&limit=10
-        first:
-          type: string
-
-          example: /items?offset=0&limit=10
-
         prev:
           type: string
-
           example: /items?offset=10&limit=10
         next:
           type: string
-
           example: /items?offset=30&limit=10
-        last:
-          type: string
-
-          example: /items?offset=4990&limit=1
     VerficationStatus:
       type: string
       enum:
@@ -363,7 +357,6 @@ components:
         - email
         - address
         - birthdate
-        - name
         - level_of_study
       type: object
       properties:
@@ -390,15 +383,12 @@ components:
             - DOCTORAL
     Status:
       type: string
-      required: true
       enum:
         - error
         - success
     StatusCode:
       type: integer
-      required: true
       example: 404
-
     BaseApiResponse:
       type: object
       properties:
@@ -406,9 +396,13 @@ components:
           $ref: '#/components/schemas/Status'
         statusCode:
           $ref: '#/components/schemas/StatusCode'
+        message:
+          type: string
+
       required:
         - status
         - statusCode
+        - message
 
     Error:
       type: object
@@ -454,7 +448,7 @@ components:
         - statusCode
         - error
   securitySchemes:
-    api_auth:
+    oauth2Profiles:
       type: oauth2
       flows:
         authorizationCode:
@@ -463,7 +457,3 @@ components:
           scopes:
             'write:students': modify students in your SIS instance (only for placing holds)
             'read:students': read student data from your SIS
-    # api_key:
-    #   type: apiKey
-    #   name: api_key
-    #   in: header
