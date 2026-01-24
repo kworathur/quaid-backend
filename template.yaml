@@ -143,6 +143,44 @@ Resources:
         Target: 'es2020'
         Sourcemap: true
 
+  studentByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/students/_id/index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Get and update individual student by ID.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+      Environment:
+        Variables:
+          STUDENTS_TABLE: !Ref StudentsTable
+      Events:
+        GetById:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+
+        UpdateStatus:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}
+            Method: PUT
+            RestApiId: !Ref BackgroundChecksAPI
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 

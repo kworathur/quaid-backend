@@ -24,6 +24,13 @@ const DEFAULT_PAGE_SIZE = 25;
 const tableName = process.env.STUDENTS_TABLE;
 const counterTableName = process.env.COUNTER_TABLE;
 
+const VerificationStatus = z.enum([
+  'UNVERIFIED',
+  'VERIFIED',
+  'NEEDS_REVIEW',
+  'FRAUDULENT',
+]);
+
 const Student = z.object({
   id: z.int().optional(), // ID will be populated by dynamodb
   email: z.email(),
@@ -35,6 +42,7 @@ const Student = z.object({
     .string()
     .regex(/^[0-9]{9}$/)
     .optional(),
+  verificationStatus: VerificationStatus.default('UNVERIFIED'),
 });
 
 // email address: email address, birthdate, street address, legal name, level of study, SSN
@@ -130,6 +138,7 @@ export const handler = async (
         const name = body.name;
         const level_of_study = body.level_of_study;
         const ssn = body.ssn;
+        const verificationStatus = body.verificationStatus;
 
         // create a new student
         let response: APIGatewayProxyResult;
@@ -169,6 +178,7 @@ export const handler = async (
               name,
               level_of_study,
               ssn,
+              verificationStatus,
             },
           };
 
