@@ -40,6 +40,7 @@ const Student = z.object({
     .regex(/^[0-9]{9}$/)
     .optional(),
   verificationStatus: VerificationStatus.default('UNVERIFIED'),
+  consented: z.boolean().default(false),
 });
 
 // email address: email address, birthdate, street address, legal name, level of study, SSN
@@ -162,6 +163,7 @@ export const handler = async (
         const level_of_study = body.level_of_study;
         const ssn = body.ssn;
         const verificationStatus = body.verificationStatus;
+        const consented = body.consented;
 
         // create a new student
         let response: APIGatewayProxyResult;
@@ -202,6 +204,7 @@ export const handler = async (
               level_of_study,
               ssn,
               verificationStatus,
+              consented,
             },
           };
 
