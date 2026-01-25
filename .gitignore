@@ -2,3 +2,8 @@ node_modules
 .aws-sam/
 CLAUDE.md
 .vscode/
+
+.DS_Store
+.postman/
+postman/
+redoc-static.html
