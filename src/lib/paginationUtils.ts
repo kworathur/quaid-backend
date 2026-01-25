@@ -5,6 +5,8 @@ import {
   ScanCommandInput,
 } from '@aws-sdk/client-dynamodb';
 
+// Return a paginated list of results from a DynamoDB table,
+// using the provided offset and limit
 export const queryPaginatedDynamoList = async (
   client: DynamoDBClient,
   params: ScanCommandInput,
@@ -60,9 +62,10 @@ export const queryPaginatedDynamoList = async (
 
   // Add items from the current batch starting from the correct position
   results = results.concat(
-    data.Items.slice(data.Items.length - skipInBatch, data.Items.length - skipInBatch + limit) as ConcatArray<
-      Record<string, AttributeValue>
-    >,
+    data.Items.slice(
+      data.Items.length - skipInBatch,
+      data.Items.length - skipInBatch + limit,
+    ) as ConcatArray<Record<string, AttributeValue>>,
   );
 
   // Continue fetching if we need more items
