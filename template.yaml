@@ -105,7 +105,8 @@ Resources:
   crudStudentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/students/index.handler
+      CodeUri: src/students/
+      Handler: index.handler
       Runtime: nodejs20.x
       Architectures:
         - x86_64
@@ -146,7 +147,8 @@ Resources:
   studentByIdFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/students/_id/index.handler
+      CodeUri: src/students/_id/
+      Handler: index.handler
       Runtime: nodejs20.x
       Architectures:
         - x86_64
@@ -181,6 +183,40 @@ Resources:
         Target: 'es2020'
         Sourcemap: true
 
+  confirmConsentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/students/_id/confirmConsent/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Confirm a student's consent to background checks.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+      Environment:
+        Variables:
+          STUDENTS_TABLE: !Ref StudentsTable
+      Events:
+        ConfirmConsent:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}/confirmConsent
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts # or index.js if not TS
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 
@@ -206,10 +242,6 @@ Resources:
         WriteCapacityUnits: 2
 
 Outputs:
-  WebEndpoint:
-    Description: API Gateway endpoint URL for Prod stage
-    Value: !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/v1/
-
   HostedUi:
     Description: Hosted UI
     Value: !Sub https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAuthorizerUserPoolClient}&response_type=token&scope=email+openid+profile&redirect_uri=${CallbackUrl}

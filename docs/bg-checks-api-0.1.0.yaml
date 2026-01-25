@@ -204,12 +204,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /students/{studentId}/verifyEmail:
+  /students/{studentId}/confirmConsent:
     post:
       tags:
         - student
-      summary: Send a verification email with a one-time password to a student.
-      operationId: sendVerficationEmail
+      summary: Confirm a student's consent to background checks.
+      operationId: confirmStudentConsent
       parameters:
         - name: studentId
           in: path
@@ -223,8 +223,14 @@ paths:
         content:
           application/octet-stream:
             schema:
-              type: string
-              format: binary
+              type: object
+              properties:
+                consentStatus:
+                  type: boolean
+              required:
+                - consentStatus
+            example:
+              consentStatus: true
       responses:
         '200':
           description: successful operation
@@ -235,74 +241,12 @@ paths:
               example:
                 status: 'success'
                 statusCode: 200
-                message: 'Verification email sent successfully to kworathur3@gatech.edu'
-
-        '404':
-          description: student with provided email ID not found
-        '429':
-          description: sending too many requests
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                status: 'error'
-                statusCode: 429
-                error:
-                  code: 'TOO_MANY_REQUESTS'
-                  message: 'You are sending too many email verification requests. Please try again later'
-        default:
-          description: Unexpected error - email failed to send
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    get:
-      tags:
-        - student
-      summary: Validate a verification code sent to a student's email.
-      operationId: validateEmailToken
-      parameters:
-        - name: studentId
-          in: path
-          description: ID of student to update
-          required: true
-          schema:
-            type: integer
-            format: int64
-            example: 55
-        - name: authCode
-          in: query
-          description: OTP to submit for verification
-          required: true
-          schema:
-            type: string
-            pattern: /^\d{6}$/
-      responses:
-        '200':
-          description: successful operation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BaseApiResponse'
-              example:
-                status: 'success'
-                statusCode: 200
-                message: 'Student email verified succesfully'
-
+                message: 'Student has consented to background checks'
         '400':
-          description: invalid student ID or invalid authorization code
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                status: 'error'
-                statusCode: '400'
-                message: 'The provided authorization code is invalid.'
+          description: student has already consented to background checks
+        '404':
+          description: student with provided ID not found
         default:
-          description: Unexpected error
           content:
             application/json:
               schema:
@@ -347,6 +291,7 @@ components:
           example: /items?offset=30&limit=10
     VerficationStatus:
       type: string
+      default: UNVERIFIED
       enum:
         - UNVERIFIED
         - VERIFIED
@@ -363,7 +308,6 @@ components:
         studentId:
           type: integer
           description: Student's unique identifier (Implementation note- currently generated in DynamoDB, later will be foreign keys to SIS database)
-
         email:
           type: string
           examples: [kworathur3@gatech.edu]
@@ -381,6 +325,10 @@ components:
             - BACHELORS
             - MASTERS
             - DOCTORAL
+        verificationStatus:
+          schema: $ref '#/components/schemas/VerificationStatus'
+        consented:
+          type: boolean
     Status:
       type: string
       enum:
