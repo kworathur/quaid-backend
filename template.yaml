@@ -503,7 +503,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub ${AWS::StackName}-AddressLivenessDLQ
-      MessageRetentionPeriod: 1209600 # 14 days
+      MessageRetentionPeriod: 1209600  # 14 days
 
   # SQS Queue for address liveness check processing
   AddressLivenessQueue:
