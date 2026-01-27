@@ -21,6 +21,8 @@ servers:
 tags:
   - name: student
     description: Student metadata for recording student liveness, fraud likelihood
+  - name: app
+    description: An need-based financial aid application for a student
   - name: check
     description: Background checks on students and their financial aid applications.
 paths:
@@ -71,6 +73,61 @@ paths:
           description: offset out of bounds
         default:
           description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+        - student
+      summary: Create a new student
+      operationId: createNewStudent
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              $ref: '#/components/schemas/MockStudent'
+
+      responses:
+        '200':
+          description: New student created succesfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: '/students/55'
+        '400':
+          description: invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Level of study CONTINUING_STUDENT is not valid
+        '409':
+          description: student with this email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 409
+                    error:
+                      code: CONFLICT
+                      message: A student with this email address already exists
+        default:
           content:
             application/json:
               schema:
@@ -252,6 +309,125 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /students/{studentId}/checks/addressLiveness:
+    post:
+      tags:
+        - check
+      summary: Start an address liveness inquiry for a student.
+      operationId: checkAddressLiveness
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to perform an inquiry against
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
+
+      responses:
+        '200':
+          description: Inquiry is being processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: '24a0d969-f8f3-4a7b-b685-f25343caefad'
+        '400':
+          description: invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                StudentDidNotConsent:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student did not consent to background checks
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student's address in students table does not match address on FAFSA application
+        '404':
+          description: student with provided ID not found
+        '409':
+          description: an address liveness check for this student is already in the queue
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /students/{studentId}/checks/{checkId}/status:
+    get:
+      tags:
+        - check
+      summary: Get the status of a background check.
+      operationId: checkTaskStatus
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to update
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
+        - name: checkId
+          in: path
+          description: ID of check to update
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 100
+      responses:
+        '200':
+          description: Task status returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: 'IN_PROGRESS'
+        '404':
+          description: task with provided ID not found
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /students/{studentId}/applications:
+    post:
+      tags:
+        - app
+      summary: Create a new financial aid application for a student
+      operationId: createNewApplication
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              type: object
+              properties:
+                consentStatus:
+                  type: boolean
+              required:
+                - consentStatus
+            example:
+              consentStatus: true
+
 components:
   schemas:
     # MockStudent is a placeholder for student data that will later be accessed via SIS
@@ -297,6 +473,54 @@ components:
         - VERIFIED
         - NEEDS_REVIEW
         - FRAUDULENT
+
+    MockFinancialAidApp:
+      type: object
+      properties:
+        fafsa_id:
+          type: string
+        last_name:
+          type: string
+        first_name:
+          type: string
+        middle_initial:
+          type: string
+        street_address:
+          type: string
+        city:
+          type: string
+        mailing_state:
+          type: string
+        zip_code:
+          type: string
+        social_security_number:
+          type: string
+        date_of_birth:
+          type: string
+        high_school_name:
+          type: string
+        high_school_city:
+          type: string
+        high_school_state:
+          type: string
+        students_income:
+          type: integer
+        parents_income:
+          type: integer
+        parents_cash_savings_and_checking:
+          type: integer
+        students_number_of_family_members:
+          type: integer
+        students_number_in_college:
+          type: integer
+        housing_plans:
+          type: string
+        date_completed:
+          type: string
+        parents_asset_threshold_exceeded:
+          type: boolean
+        appid:
+          type: integer
     MockStudent:
       required:
         - email
