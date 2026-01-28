@@ -419,14 +419,30 @@ paths:
         content:
           application/octet-stream:
             schema:
-              type: object
-              properties:
-                consentStatus:
-                  type: boolean
-              required:
-                - consentStatus
+              $ref: '#/components/schemas/MockFinancialAidApp'
             example:
-              consentStatus: true
+              fafsa_id: 8911122
+              last_name: Worathur
+              first_name: Keshav
+              middle_initial: V
+              street_address: '123 Cherry St. NW'
+              city: Atlanta
+              mailing_state: GA
+              zip_code: 30309
+              social_security_number: 123456789
+              date_of_birth: '2026-01-20'
+              high_school_name: Reedy
+              high_school_city: Frisco
+              high_school_state: TX
+              students_income: 0
+              parents_income: 120000
+              parents_cash_savings_and_checking: 50000
+              students_number_of_family_members: 4
+              students_number_in_college: 2
+              housing_plans: 'off-campus'
+              date_completed: '2020-05-01'
+              parents_asset_threshold_exceeded: 'N'
+              appid: 1234
 
 components:
   schemas:
@@ -476,6 +492,7 @@ components:
 
     MockFinancialAidApp:
       type: object
+      description: Financial aid data is populated from Institutional Student Information Record (ISIR)s
       properties:
         fafsa_id:
           type: string
@@ -495,6 +512,7 @@ components:
           type: string
         social_security_number:
           type: string
+          pattern: /^[0-9]{9}$/
         date_of_birth:
           type: string
         high_school_name:
