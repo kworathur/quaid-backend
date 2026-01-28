@@ -80,10 +80,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-
 
       - name: Install dependencies
         run: npm ci
@@ -116,12 +119,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Build resources
         run: sam build --template ${SAM_TEMPLATE}
