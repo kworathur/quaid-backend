@@ -19,6 +19,9 @@ Parameters:
   CertificateArn:
     Type: String
     Description: ARN of SSL/TLS certificate in Amazon Certificate Manager (ensure that cert is valid for the region in which resources are deployed)
+  ApiDomainName:
+    Type: String
+    Default: api.quaid-ai.com
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 
@@ -26,7 +29,7 @@ Resources:
   CognitoAuthorizerUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: cognito-user-pool-userpool
+      UserPoolName: !Sub ${AWS::StackName}-userpool
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
 
@@ -42,7 +45,7 @@ Resources:
         - profile
       CallbackURLs:
         - !Ref CallbackUrl
-      ClientName: cognito-user-pool-client
+      ClientName: !Sub ${AWS::StackName}-client
       SupportedIdentityProviders:
         - COGNITO
       UserPoolId: !Ref CognitoAuthorizerUserPool
@@ -69,7 +72,7 @@ Resources:
   CognitoAuthorizerUserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: !Sub user-pool-domain-${AWS::AccountId}
+      Domain: !Sub ${AWS::StackName}-${AWS::AccountId}
       UserPoolId: !Ref CognitoAuthorizerUserPool
 
   BackgroundChecksAPI:
@@ -90,7 +93,7 @@ Resources:
     Type: AWS::ApiGateway::DomainName
     Properties:
       CertificateArn: !Ref CertificateArn
-      DomainName: api.quaid-ai.com
+      DomainName: !Ref ApiDomainName
 
   BaseMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
