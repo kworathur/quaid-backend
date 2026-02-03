@@ -82,10 +82,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-      - run: sam build --template ${SAM_TEMPLATE} --use-container
+      - run: sam build --template ${SAM_TEMPLATE}
+        env:
+          NODE_PATH: ${{ github.workspace }}/node_modules
+          PATH: ${{ github.workspace }}/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
 
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
@@ -114,12 +121,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
 
       - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container
+        run: sam build --template ${SAM_TEMPLATE}
+        env:
+          NODE_PATH: ${{ github.workspace }}/node_modules
+          PATH: ${{ github.workspace }}/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
 
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
