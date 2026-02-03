@@ -13,19 +13,19 @@ env:
   PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.PIPELINE_USER_ACCESS_KEY_ID }}
   PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_USER_SECRET_ACCESS_KEY }}
   SAM_TEMPLATE: template.yaml
-  TESTING_STACK_NAME: bg-checks-api
-  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-build-pip-PipelineExecutionRole-4xz9c9WIpH8y
-  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-build-CloudFormationExecutionRo-oMX1QWLnhrja
-  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-build-pipeline-artifactsbucket-t8j4ojbaicag
+  TESTING_STACK_NAME: bg-checks-api-test
+  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-test-pipe-PipelineExecutionRole-Gwy93a883apX
+  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-test--CloudFormationExecutionRo-p0RpWwQ6nq4o
+  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-test-pipeline--artifactsbucket-49z8gsry1zur
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${TESTING_IMAGE_REPOSITORY}" to
   # testing "sam package" and "sam deploy" commands.
   # TESTING_IMAGE_REPOSITORY = '0123456789.dkr.ecr.region.amazonaws.com/repository-name'
   TESTING_REGION: us-east-1
-  PROD_STACK_NAME: bg-checks-api
-  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-build-pip-PipelineExecutionRole-4xz9c9WIpH8y
-  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-build-CloudFormationExecutionRo-oMX1QWLnhrja
-  PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-build-pipeline-artifactsbucket-t8j4ojbaicag
+  PROD_STACK_NAME: bg-checks-api-prod
+  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-prod-pipe-PipelineExecutionRole-UlmLU4QGpx15
+  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::705948898164:role/aws-sam-cli-managed-prod--CloudFormationExecutionRo-kC8q6L7XnmGZ
+  PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-prod-pipeline--artifactsbucket-zvgm4kqs7qmh
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${PROD_IMAGE_REPOSITORY}" to
   # prod "sam package" and "sam deploy" commands.
@@ -80,10 +80,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-      - run: sam build --template ${SAM_TEMPLATE} --use-container
+      - run: sam build --template ${SAM_TEMPLATE}
+        env:
+          NODE_PATH: ${{ github.workspace }}/node_modules
+          PATH: ${{ github.workspace }}/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
 
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
@@ -112,12 +119,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
 
       - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container
+        run: sam build --template ${SAM_TEMPLATE}
+        env:
+          NODE_PATH: ${{ github.workspace }}/node_modules
+          PATH: ${{ github.workspace }}/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
 
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
@@ -171,6 +185,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
@@ -197,6 +212,7 @@ jobs:
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
+            --no-confirm-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
 
   integration-test:
@@ -243,4 +259,5 @@ jobs:
             --region ${PROD_REGION} \
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
+            --no-confirm-changeset \
             --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}

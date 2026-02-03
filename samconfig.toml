@@ -15,12 +15,11 @@ lint = true
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
-resolve_s3 = true
 s3_prefix = "bg-checks-api"
 region = "us-east-1"
 image_repositories = []
 disable_rollback = true
-parameter_overrides = "Email=\"keshavworathur@gmail.com\" CallbackUrl=\"http://localhost:5173\" CertificateArn=\"arn:aws:acm:us-east-1:705948898164:certificate/ea028d43-5982-4b5a-a28e-798ff22f315e\""
+parameter_overrides = "Email=\"keshavworathur@gmail.com\" CallbackUrl=\"https://oauth.pstmn.io/v1/callback\" CertificateArn=\"arn:aws:acm:us-east-1:705948898164:certificate/ea028d43-5982-4b5a-a28e-798ff22f315e\""
 
 [default.package.parameters]
 resolve_s3 = false

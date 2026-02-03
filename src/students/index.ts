@@ -1,13 +1,10 @@
 import {
   APIGatewayProxyEvent,
   APIGatewayProxyResult,
-  AttributeValue,
 } from 'aws-lambda';
 import {
   DynamoDBClient,
   GetItemCommand,
-  ScanCommand,
-  ScanCommandInput,
 } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -24,6 +21,13 @@ const DEFAULT_PAGE_SIZE = 25;
 const tableName = process.env.STUDENTS_TABLE;
 const counterTableName = process.env.COUNTER_TABLE;
 
+const VerificationStatus = z.enum([
+  'UNVERIFIED',
+  'VERIFIED',
+  'NEEDS_REVIEW',
+  'FRAUDULENT',
+]);
+
 const Student = z.object({
   id: z.int().optional(), // ID will be populated by dynamodb
   email: z.email(),
@@ -35,6 +39,8 @@ const Student = z.object({
     .string()
     .regex(/^[0-9]{9}$/)
     .optional(),
+  verificationStatus: VerificationStatus.default('UNVERIFIED'),
+  consented: z.boolean().default(false),
 });
 
 // email address: email address, birthdate, street address, legal name, level of study, SSN
@@ -47,38 +53,64 @@ export const handler = async (
   switch (event.httpMethod) {
     case 'GET':
       try {
-        // return a paginated list of students
-        const offset = event?.queryStringParameters?.page
-          ? +event.queryStringParameters.page
+        const offset = event?.queryStringParameters?.offset
+          ? +event.queryStringParameters.offset
           : 0;
-        const limit = event?.queryStringParameters?.pageSize
-          ? +event?.queryStringParameters?.pageSize
+        const limit = event?.queryStringParameters?.limit
+          ? +event?.queryStringParameters?.limit
           : DEFAULT_PAGE_SIZE;
+
+        if (offset < 0) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({
+              message: 'offset must be >= 0',
+            }),
+          };
+        }
+
+        if (limit < 1) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({
+              message: 'limit must be >= 1',
+            }),
+          };
+        }
+
         params = {
           TableName: tableName,
         };
 
-        // TODO: check boundaries of page and offset
-        const students = queryPaginatedDynamoList(
+        const results = await queryPaginatedDynamoList(
           ddbDocClient,
           params,
           offset,
           limit,
         );
-        // TODO: research the properties a paginated response should have
+
+        const currentPage = Math.floor(offset / limit) + 1;
+        const prevOffset = Math.max(offset - limit, 0);
+        const nextOffset = offset + limit;
+
         return {
           statusCode: 200,
           body: JSON.stringify({
-            items: students,
-            prev: encodeURI(
-              `/students?offset=${Math.max(offset - limit, 0)}&limit=${limit}`,
-            ),
-            next: encodeURI(
-              `/students?offset=${Math.max(offset + limit, 0)}&limit=${limit}`,
-            ),
+            data: results,
+            pagination: {
+              offset,
+              limit,
+              currentPage,
+            },
+            links: {
+              self: `/students?offset=${offset}&limit=${limit}`,
+              prev: offset > 0 ? `/students?offset=${prevOffset}&limit=${limit}` : null,
+              next: results.length === limit ? `/students?offset=${nextOffset}&limit=${limit}` : null,
+            },
           }),
         };
-      } catch {
+      } catch (error) {
+        console.error('Error fetching students:', error);
         return {
           statusCode: 500,
           body: JSON.stringify({
@@ -130,6 +162,8 @@ export const handler = async (
         const name = body.name;
         const level_of_study = body.level_of_study;
         const ssn = body.ssn;
+        const verificationStatus = body.verificationStatus;
+        const consented = body.consented;
 
         // create a new student
         let response: APIGatewayProxyResult;
@@ -169,6 +203,8 @@ export const handler = async (
               name,
               level_of_study,
               ssn,
+              verificationStatus,
+              consented,
             },
           };
 

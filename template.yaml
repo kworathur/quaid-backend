@@ -19,6 +19,9 @@ Parameters:
   CertificateArn:
     Type: String
     Description: ARN of SSL/TLS certificate in Amazon Certificate Manager (ensure that cert is valid for the region in which resources are deployed)
+  ApiDomainName:
+    Type: String
+    Default: api.quaid-ai.com
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 
@@ -26,7 +29,7 @@ Resources:
   CognitoAuthorizerUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: cognito-user-pool-userpool
+      UserPoolName: !Sub ${AWS::StackName}-userpool
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
 
@@ -42,7 +45,7 @@ Resources:
         - profile
       CallbackURLs:
         - !Ref CallbackUrl
-      ClientName: cognito-user-pool-client
+      ClientName: !Sub ${AWS::StackName}-client
       SupportedIdentityProviders:
         - COGNITO
       UserPoolId: !Ref CognitoAuthorizerUserPool
@@ -69,7 +72,7 @@ Resources:
   CognitoAuthorizerUserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: !Sub user-pool-domain-${AWS::AccountId}
+      Domain: !Sub ${AWS::StackName}-${AWS::AccountId}
       UserPoolId: !Ref CognitoAuthorizerUserPool
 
   BackgroundChecksAPI:
@@ -90,7 +93,7 @@ Resources:
     Type: AWS::ApiGateway::DomainName
     Properties:
       CertificateArn: !Ref CertificateArn
-      DomainName: api.quaid-ai.com
+      DomainName: !Ref ApiDomainName
 
   BaseMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
@@ -105,7 +108,8 @@ Resources:
   crudStudentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/students/index.handler
+      CodeUri: src/students/
+      Handler: index.handler
       Runtime: nodejs20.x
       Architectures:
         - x86_64
@@ -143,6 +147,79 @@ Resources:
         Target: 'es2020'
         Sourcemap: true
 
+  studentByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/students/_id/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Get and update individual student by ID.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+      Environment:
+        Variables:
+          STUDENTS_TABLE: !Ref StudentsTable
+      Events:
+        GetById:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+
+        UpdateStatus:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}
+            Method: PUT
+            RestApiId: !Ref BackgroundChecksAPI
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  confirmConsentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/students/_id/confirmConsent/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Confirm a student's consent to background checks.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+      Environment:
+        Variables:
+          STUDENTS_TABLE: !Ref StudentsTable
+      Events:
+        ConfirmConsent:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}/confirmConsent
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts # or index.js if not TS
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 
@@ -168,10 +245,6 @@ Resources:
         WriteCapacityUnits: 2
 
 Outputs:
-  WebEndpoint:
-    Description: API Gateway endpoint URL for Prod stage
-    Value: !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/v1/
-
   HostedUi:
     Description: Hosted UI
     Value: !Sub https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAuthorizerUserPoolClient}&response_type=token&scope=email+openid+profile&redirect_uri=${CallbackUrl}

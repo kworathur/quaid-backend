@@ -21,6 +21,8 @@ servers:
 tags:
   - name: student
     description: Student metadata for recording student liveness, fraud likelihood
+  - name: app
+    description: An need-based financial aid application for a student
   - name: check
     description: Background checks on students and their financial aid applications.
 paths:
@@ -71,6 +73,61 @@ paths:
           description: offset out of bounds
         default:
           description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+        - student
+      summary: Create a new student
+      operationId: createNewStudent
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              $ref: '#/components/schemas/MockStudent'
+
+      responses:
+        '200':
+          description: New student created succesfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: '/students/55'
+        '400':
+          description: invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Level of study CONTINUING_STUDENT is not valid
+        '409':
+          description: student with this email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 409
+                    error:
+                      code: CONFLICT
+                      message: A student with this email address already exists
+        default:
           content:
             application/json:
               schema:
@@ -204,12 +261,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /students/{studentId}/verifyEmail:
+  /students/{studentId}/confirmConsent:
     post:
       tags:
         - student
-      summary: Send a verification email with a one-time password to a student.
-      operationId: sendVerficationEmail
+      summary: Confirm a student's consent to background checks.
+      operationId: confirmStudentConsent
       parameters:
         - name: studentId
           in: path
@@ -223,8 +280,14 @@ paths:
         content:
           application/octet-stream:
             schema:
-              type: string
-              format: binary
+              type: object
+              properties:
+                consentStatus:
+                  type: boolean
+              required:
+                - consentStatus
+            example:
+              consentStatus: true
       responses:
         '200':
           description: successful operation
@@ -235,34 +298,81 @@ paths:
               example:
                 status: 'success'
                 statusCode: 200
-                message: 'Verification email sent successfully to kworathur3@gatech.edu'
-
+                message: 'Student has consented to background checks'
+        '400':
+          description: student has already consented to background checks
         '404':
-          description: student with provided email ID not found
-        '429':
-          description: sending too many requests
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                status: 'error'
-                statusCode: 429
-                error:
-                  code: 'TOO_MANY_REQUESTS'
-                  message: 'You are sending too many email verification requests. Please try again later'
+          description: student with provided ID not found
         default:
-          description: Unexpected error - email failed to send
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /students/{studentId}/checks/addressLiveness:
+    post:
+      tags:
+        - check
+      summary: Start an address liveness inquiry for a student.
+      operationId: checkAddressLiveness
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to perform an inquiry against
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
+
+      responses:
+        '200':
+          description: Inquiry is being processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: '24a0d969-f8f3-4a7b-b685-f25343caefad'
+        '400':
+          description: invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                StudentDidNotConsent:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student did not consent to background checks
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student's address in students table does not match address on FAFSA application
+        '404':
+          description: student with provided ID not found
+        '409':
+          description: an address liveness check for this student is already in the queue
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /students/{studentId}/checks/{checkId}/status:
     get:
       tags:
-        - student
-      summary: Validate a verification code sent to a student's email.
-      operationId: validateEmailToken
+        - check
+      summary: Get the status of a background check.
+      operationId: checkTaskStatus
       parameters:
         - name: studentId
           in: path
@@ -272,16 +382,17 @@ paths:
             type: integer
             format: int64
             example: 55
-        - name: authCode
-          in: query
-          description: OTP to submit for verification
+        - name: checkId
+          in: path
+          description: ID of check to update
           required: true
           schema:
-            type: string
-            pattern: /^\d{6}$/
+            type: integer
+            format: int64
+            example: 100
       responses:
         '200':
-          description: successful operation
+          description: Task status returned successfully
           content:
             application/json:
               schema:
@@ -289,24 +400,49 @@ paths:
               example:
                 status: 'success'
                 statusCode: 200
-                message: 'Student email verified succesfully'
-
-        '400':
-          description: invalid student ID or invalid authorization code
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                status: 'error'
-                statusCode: '400'
-                message: 'The provided authorization code is invalid.'
+                message: 'IN_PROGRESS'
+        '404':
+          description: task with provided ID not found
         default:
-          description: Unexpected error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /students/{studentId}/applications:
+    post:
+      tags:
+        - app
+      summary: Create a new financial aid application for a student
+      operationId: createNewApplication
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              $ref: '#/components/schemas/MockFinancialAidApp'
+            example:
+              fafsa_id: 8911122
+              last_name: Worathur
+              first_name: Keshav
+              middle_initial: V
+              street_address: '123 Cherry St. NW'
+              city: Atlanta
+              mailing_state: GA
+              zip_code: 30309
+              social_security_number: 123456789
+              date_of_birth: '2026-01-20'
+              high_school_name: Reedy
+              high_school_city: Frisco
+              high_school_state: TX
+              students_income: 0
+              parents_income: 120000
+              parents_cash_savings_and_checking: 50000
+              students_number_of_family_members: 4
+              students_number_in_college: 2
+              housing_plans: 'off-campus'
+              date_completed: '2020-05-01'
+              parents_asset_threshold_exceeded: 'N'
+              appid: 1234
 
 components:
   schemas:
@@ -347,11 +483,62 @@ components:
           example: /items?offset=30&limit=10
     VerficationStatus:
       type: string
+      default: UNVERIFIED
       enum:
         - UNVERIFIED
         - VERIFIED
         - NEEDS_REVIEW
         - FRAUDULENT
+
+    MockFinancialAidApp:
+      type: object
+      description: Financial aid data is populated from Institutional Student Information Record (ISIR)s
+      properties:
+        fafsa_id:
+          type: string
+        last_name:
+          type: string
+        first_name:
+          type: string
+        middle_initial:
+          type: string
+        street_address:
+          type: string
+        city:
+          type: string
+        mailing_state:
+          type: string
+        zip_code:
+          type: string
+        social_security_number:
+          type: string
+          pattern: /^[0-9]{9}$/
+        date_of_birth:
+          type: string
+        high_school_name:
+          type: string
+        high_school_city:
+          type: string
+        high_school_state:
+          type: string
+        students_income:
+          type: integer
+        parents_income:
+          type: integer
+        parents_cash_savings_and_checking:
+          type: integer
+        students_number_of_family_members:
+          type: integer
+        students_number_in_college:
+          type: integer
+        housing_plans:
+          type: string
+        date_completed:
+          type: string
+        parents_asset_threshold_exceeded:
+          type: boolean
+        appid:
+          type: integer
     MockStudent:
       required:
         - email
@@ -363,7 +550,6 @@ components:
         studentId:
           type: integer
           description: Student's unique identifier (Implementation note- currently generated in DynamoDB, later will be foreign keys to SIS database)
-
         email:
           type: string
           examples: [kworathur3@gatech.edu]
@@ -381,6 +567,10 @@ components:
             - BACHELORS
             - MASTERS
             - DOCTORAL
+        verificationStatus:
+          schema: $ref '#/components/schemas/VerificationStatus'
+        consented:
+          type: boolean
     Status:
       type: string
       enum:

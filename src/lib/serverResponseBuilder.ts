@@ -1,15 +1,22 @@
-import { APIGatewayProxyResult } from 'aws-lambda';
+import { RESPONSES, ResponseType } from '@/src/lib/types/apiResponse';
 
-class ServerResponse {
+export class ServerResponseBuilder {
   private message: string;
-  private error: string;
+  private status: number;
+
   constructor(responseType: ResponseType) {
-    // initialize message and error to defaults
+    const responseDetails = RESPONSES[responseType];
+    this.message = responseDetails.message;
+    this.status = responseDetails.code;
   }
 
-  build(): APIGatewayProxyResult {
-    return { statusCode: 200, body: JSON.stringify({ message: 'created' }) };
+  setMessage(message: string): ServerResponseBuilder {
+    this.message = message;
+    return this;
+  }
+  build(): Response {
+    return new Response(JSON.stringify({ message: this.message }), {
+      status: this.status,
+    });
   }
 }
-
-export default ServerResponse;

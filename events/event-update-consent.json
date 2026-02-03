@@ -1,0 +1,7 @@
+{
+  "httpMethod": "POST",
+  "pathParameters": {
+    "studentId": "1"
+  },
+  "body": "{\"consentStatus\": true}"
+}
