@@ -18,10 +18,18 @@ Parameters:
     Type: String
   CertificateArn:
     Type: String
+    Default: ""
     Description: ARN of SSL/TLS certificate in Amazon Certificate Manager (ensure that cert is valid for the region in which resources are deployed)
-  ApiDomainName:
+  EnvironmentType:
     Type: String
-    Default: api.quaid-ai.com
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+Conditions:
+  IsProd: !Equals [!Ref EnvironmentType, "prod"]
+
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 
@@ -80,7 +88,7 @@ Resources:
     Properties:
       Description: Background checks API for quaid.ai - verify legitimacy of admissions and financial aid applications.
       StageName: v1
-      DisableExecuteApiEndpoint: true
+      DisableExecuteApiEndpoint: !If [IsProd, true, false]
       Auth:
         DefaultAuthorizer: MyCognitoAuth
         Authorizers:
@@ -91,12 +99,14 @@ Resources:
 
   CustomDomain:
     Type: AWS::ApiGateway::DomainName
+    Condition: IsProd
     Properties:
       CertificateArn: !Ref CertificateArn
-      DomainName: !Ref ApiDomainName
+      DomainName: api.quaid-ai.com
 
   BaseMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: IsProd
     Properties:
       DomainName: !Ref CustomDomain
       RestApiId: !Ref BackgroundChecksAPI
@@ -245,6 +255,12 @@ Resources:
         WriteCapacityUnits: 2
 
 Outputs:
+  ApiUrl:
+    Description: API endpoint URL
+    Value: !If
+      - IsProd
+      - https://api.quaid-ai.com
+      - !Sub https://${BackgroundChecksAPI}.execute-api.${AWS::Region}.amazonaws.com/v1
   HostedUi:
     Description: Hosted UI
     Value: !Sub https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAuthorizerUserPoolClient}&response_type=token&scope=email+openid+profile&redirect_uri=${CallbackUrl}
