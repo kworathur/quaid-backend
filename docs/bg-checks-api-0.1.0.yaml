@@ -21,7 +21,7 @@ servers:
 tags:
   - name: student
     description: Student metadata for recording student liveness, fraud likelihood
-  - name: app
+  - name: applications
     description: An need-based financial aid application for a student
   - name: check
     description: Background checks on students and their financial aid applications.
