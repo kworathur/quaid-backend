@@ -4,15 +4,15 @@ on:
   push:
     branches:
       - 'main'
-      - 'feature**'
+      - 'feat**'
   delete:
     branches:
-      - 'feature**'
+      - 'feat**'
 
 env:
   PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.PIPELINE_USER_ACCESS_KEY_ID }}
   PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_USER_SECRET_ACCESS_KEY }}
-  PIPELINE_PROD_ACCESS_KEY_ID: ${{ secrets.PIPELINE_PROD_USER_ACCESS_KEY_ID }}
+  PIPELINE_PROD_USER_ACCESS_KEY_ID: ${{ secrets.PIPELINE_PROD_USER_ACCESS_KEY_ID }}
   PIPELINE_PROD_USER_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_PROD_USER_SECRET_ACCESS_KEY }}
   SAM_TEMPLATE: template.yaml
   TESTING_STACK_NAME: bg-checks-api-sit
