@@ -209,6 +209,7 @@ jobs:
         run: |
           sam deploy --stack-name ${TESTING_STACK_NAME} \
             --template packaged-testing.yaml \
+            --no-disable-rollback \
             --parameter-overrides "Email=kworathur3@gatech.edu,EnvironmentType=dev" \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
@@ -257,6 +258,7 @@ jobs:
         run: |
           sam deploy --stack-name ${PROD_STACK_NAME} \
             --template packaged-prod.yaml \
+            --no-disable-rollback \
             --parameter-overrides "EnvironmentType=prod" \
             --capabilities CAPABILITY_IAM \
             --region ${PROD_REGION} \
