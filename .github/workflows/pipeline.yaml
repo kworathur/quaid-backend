@@ -5,6 +5,7 @@ on:
     branches:
       - 'main'
       - 'feat**'
+  pull_request:
   delete:
     branches:
       - 'feat**'
@@ -36,12 +37,23 @@ env:
 
 jobs:
   test:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: |
-          # trigger the tests here
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run compile
+
+      - name: Run unit tests
+        run: npm test
 
   delete-feature:
     if: startsWith(github.event.ref, 'feature') && github.event_name == 'delete'
