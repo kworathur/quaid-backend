@@ -55,9 +55,7 @@ export const handler = async (
         console.error('Error fetching student by email:', error);
         return {
           statusCode: 500,
-          body: JSON.stringify({
-            error: 'Internal server error',
-          }),
+          body: JSON.stringify({ error: 'Internal server error' }),
         };
       }
     default:
