@@ -383,7 +383,6 @@ Resources:
         - x86_64
       MemorySize: 256
       Timeout: 60
-      ReservedConcurrentExecutions: 2
       Description: Process address liveness checks via Melissa API.
       Policies:
         - DynamoDBCrudPolicy:
