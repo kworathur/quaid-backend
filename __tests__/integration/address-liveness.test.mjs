@@ -41,6 +41,8 @@
  * next cold start.
  */
 
+import { jest } from '@jest/globals';
+
 // Validate required environment variables
 const requiredEnvVars = [
   'API_BASE_URL',
