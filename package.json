@@ -25,6 +25,7 @@
   "scripts": {
     "lint": "eslint src/",
     "compile": "tsc",
-    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+    "test:integration": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern=__tests__/integration/"
   }
 }

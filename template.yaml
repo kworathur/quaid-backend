@@ -83,6 +83,21 @@ Resources:
       Domain: !Sub ${AWS::StackName}-${AWS::AccountId}
       UserPoolId: !Ref CognitoAuthorizerUserPool
 
+  CognitoM2MClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoAuthorizerUserPoolResourceServer
+    Properties:
+      ClientName: cognito-m2m-integration-test-client
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - com.apigw/scope1
+      SupportedIdentityProviders:
+        - COGNITO
+
   BackgroundChecksAPI:
     Type: AWS::Serverless::Api
     Properties:
@@ -264,3 +279,12 @@ Outputs:
   HostedUi:
     Description: Hosted UI
     Value: !Sub https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAuthorizerUserPoolClient}&response_type=token&scope=email+openid+profile&redirect_uri=${CallbackUrl}
+  CognitoTokenUrl:
+    Description: Cognito token endpoint for M2M authentication
+    Value: !Sub https://${CognitoAuthorizerUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/oauth2/token
+  M2MClientId:
+    Description: Client ID for the M2M integration test Cognito client
+    Value: !Ref CognitoM2MClient
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoAuthorizerUserPool
