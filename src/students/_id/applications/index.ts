@@ -130,7 +130,7 @@ export const handler = async (
     const counterResult = await ddbDocClient.send(
       new UpdateCommand({
         TableName: counterTableName,
-        Key: { counter: { S: 'applicationCounter' } },
+        Key: { counter: 'applicationCounter' },
         ReturnValues: 'UPDATED_NEW',
         ExpressionAttributeNames: {
           '#cnt': 'count',
