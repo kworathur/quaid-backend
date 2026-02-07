@@ -190,16 +190,14 @@ describe('Address Liveness Integration Tests', () => {
     }
     expect(response.status).toBe(201);
 
-    // Work around known bug where response doesn't return the student ID
-    // Find the student by email using GET /students
-    const listResponse = await apiRequest('GET', '/students');
-    expect(listResponse.status).toBe(200);
-
-    const student = listResponse.body.data.find(s => s.email === TEST_EMAIL);
-    expect(student).toBeDefined();
-
-    studentId = student.id;
+    // Extract student ID from the returned URL (e.g., "/students/123")
+    const url = response.body.url;
+    expect(url).toBeDefined();
+    const match = url.match(/\/students\/(\d+)/);
+    expect(match).not.toBeNull();
+    studentId = parseInt(match[1], 10);
     expect(studentId).toBeDefined();
+    expect(Number.isInteger(studentId)).toBe(true);
   });
 
   test('should confirm student consent', async () => {

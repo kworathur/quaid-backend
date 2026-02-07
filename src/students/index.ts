@@ -213,7 +213,7 @@ export const handler = async (
           response = {
             statusCode: 201,
             body: JSON.stringify({
-              url: encodeURI(`/students/${body.id}`),
+              url: encodeURI(`/students/${nextStudentId}`),
             }),
           };
         } catch (err) {
