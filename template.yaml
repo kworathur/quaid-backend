@@ -145,6 +145,9 @@ Resources:
         # Give Create/Read/Update/Delete Permissions to the StudentsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentsTable
+        # Give permissions to the CounterTable for auto-increment IDs
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CounterTable
       Environment:
         Variables:
           # Make table name accessible as environment variable from function code during execution
