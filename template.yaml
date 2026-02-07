@@ -18,7 +18,7 @@ Parameters:
     Type: String
   CertificateArn:
     Type: String
-    Default: ""
+    Default: ''
     Description: ARN of SSL/TLS certificate in Amazon Certificate Manager (ensure that cert is valid for the region in which resources are deployed)
   EnvironmentType:
     Type: String
@@ -27,8 +27,12 @@ Parameters:
       - dev
       - test
       - prod
+  MelissaApiKeyParameterName:
+    Type: String
+    Default: /quaid/melissa-api-key
+    Description: SSM Parameter Store name for Melissa API key
 Conditions:
-  IsProd: !Equals [!Ref EnvironmentType, "prod"]
+  IsProd: !Equals [!Ref EnvironmentType, 'prod']
 
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
@@ -248,6 +252,170 @@ Resources:
         Target: 'es2020'
         Sourcemap: true
 
+  # Lambda function for creating FAFSA applications
+  createApplicationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/students/_id/applications/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Create a FAFSA application for a student.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApplicationsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CounterTable
+      Environment:
+        Variables:
+          STUDENTS_TABLE: !Ref StudentsTable
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          COUNTER_TABLE: !Ref CounterTable
+      Events:
+        CreateApplication:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}/applications
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  # Lambda function for initiating address liveness checks
+  addressLivenessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/students/_id/checks/addressLiveness/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Initiate an address liveness check for a student.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApplicationsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InquiriesTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt AddressLivenessQueue.QueueName
+      Environment:
+        Variables:
+          STUDENTS_TABLE: !Ref StudentsTable
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          INQUIRIES_TABLE: !Ref InquiriesTable
+          ADDRESS_LIVENESS_QUEUE_URL: !Ref AddressLivenessQueue
+      Events:
+        CreateAddressLivenessCheck:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}/checks/addressLiveness
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  # Lambda function for checking inquiry status
+  checkStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/students/_id/checks/_checkId/status/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: Get the status of a background check inquiry.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InquiriesTable
+      Environment:
+        Variables:
+          INQUIRIES_TABLE: !Ref InquiriesTable
+      Events:
+        GetCheckStatus:
+          Type: Api
+          Properties:
+            Path: /students/{studentId}/checks/{checkId}/status
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  # SQS Worker Lambda for processing address liveness checks
+  addressLivenessProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/workers/addressLivenessProcessor/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 256
+      Timeout: 60
+      ReservedConcurrentExecutions: 2
+      Description: Process address liveness checks via Melissa API.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApplicationsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InquiriesTable
+        - SSMParameterReadPolicy:
+            ParameterName: !Ref MelissaApiKeyParameterName
+      Environment:
+        Variables:
+          STUDENTS_TABLE: !Ref StudentsTable
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          INQUIRIES_TABLE: !Ref InquiriesTable
+          MELISSA_API_KEY_PARAM: !Ref MelissaApiKeyParameterName
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt AddressLivenessQueue.Arn
+            BatchSize: 1
+
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
   # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
 
@@ -271,6 +439,81 @@ Resources:
       ProvisionedThroughput:
         ReadCapacityUnits: 2
         WriteCapacityUnits: 2
+
+  # DynamoDB table for FAFSA financial aid applications
+  ApplicationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-ApplicationsTable
+      AttributeDefinitions:
+        - AttributeName: appid
+          AttributeType: N
+        - AttributeName: studentId
+          AttributeType: N
+      KeySchema:
+        - AttributeName: appid
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: studentId-index
+          KeySchema:
+            - AttributeName: studentId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 2
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  # DynamoDB table for background check inquiries
+  InquiriesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-InquiriesTable
+      AttributeDefinitions:
+        - AttributeName: inquiryId
+          AttributeType: S
+        - AttributeName: studentId
+          AttributeType: N
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: inquiryId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: studentId-status-index
+          KeySchema:
+            - AttributeName: studentId
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 2
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  # SQS Dead Letter Queue for failed address liveness checks
+  AddressLivenessDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-AddressLivenessDLQ
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # SQS Queue for address liveness check processing
+  AddressLivenessQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-AddressLivenessQueue
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AddressLivenessDeadLetterQueue.Arn
+        maxReceiveCount: 3
 
 Outputs:
   ApiUrl:
