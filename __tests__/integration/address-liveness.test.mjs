@@ -179,12 +179,15 @@ describe('Address Liveness Integration Tests', () => {
     const formattedAddress = `${TEST_ADDRESS.street}, ${TEST_ADDRESS.city}, ${TEST_ADDRESS.state} ${TEST_ADDRESS.zip}`;
 
     const response = await apiRequest('POST', '/students', {
-      firstName: 'Integration',
-      lastName: 'Test',
+      name: 'Integration Test',
       email: TEST_EMAIL,
-      address: formattedAddress
+      address: formattedAddress,
+      birthdate: '2000-01-15',
+      level_of_study: 'BACHELORS'
     });
-
+    if (response.status !== 201) {
+      console.error('Create student failed:', JSON.stringify(response.body, null, 2));
+    }
     expect(response.status).toBe(201);
 
     // Work around known bug where response doesn't return the student ID
@@ -192,7 +195,7 @@ describe('Address Liveness Integration Tests', () => {
     const listResponse = await apiRequest('GET', '/students');
     expect(listResponse.status).toBe(200);
 
-    const student = listResponse.body.items.find(s => s.email === TEST_EMAIL);
+    const student = listResponse.body.data.find(s => s.email === TEST_EMAIL);
     expect(student).toBeDefined();
 
     studentId = student.id;

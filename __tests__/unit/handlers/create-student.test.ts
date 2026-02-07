@@ -1,8 +1,7 @@
 // Import handler function from students/index.ts
 import { handler } from '../../../src/students/index';
 // Import DynamoDB clients
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { GetItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { mockClient } from 'aws-sdk-client-mock';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 
@@ -47,9 +46,9 @@ describe('Test create student handler', function () {
     it('should create a new student successfully', async () => {
       const studentPayload = createValidStudentPayload();
 
-      // Mock GetItemCommand - student does not exist
-      ddbMock.on(GetItemCommand).resolves({
-        Item: undefined,
+      // Mock ScanCommand - student does not exist
+      ddbMock.on(ScanCommand).resolves({
+        Items: [],
       });
 
       // Mock UpdateCommand - counter increment returns new ID
@@ -71,12 +70,14 @@ describe('Test create student handler', function () {
     it('should return 409 when student with email already exists', async () => {
       const studentPayload = createValidStudentPayload();
 
-      // Mock GetItemCommand - student already exists
-      ddbMock.on(GetItemCommand).resolves({
-        Item: {
-          id: { S: '123' },
-          email: { S: 'test@example.com' },
-        },
+      // Mock ScanCommand - student already exists
+      ddbMock.on(ScanCommand).resolves({
+        Items: [
+          {
+            id: 123,
+            email: 'test@example.com',
+          },
+        ],
       });
 
       const event = createEvent(studentPayload);
@@ -153,9 +154,9 @@ describe('Test create student handler', function () {
         ssn: '123456789',
       });
 
-      // Mock GetItemCommand - student does not exist
-      ddbMock.on(GetItemCommand).resolves({
-        Item: undefined,
+      // Mock ScanCommand - student does not exist
+      ddbMock.on(ScanCommand).resolves({
+        Items: [],
       });
 
       // Mock UpdateCommand - counter increment
@@ -175,9 +176,9 @@ describe('Test create student handler', function () {
     it('should return 500 when counter table fails to return attributes', async () => {
       const studentPayload = createValidStudentPayload();
 
-      // Mock GetItemCommand - student does not exist
-      ddbMock.on(GetItemCommand).resolves({
-        Item: undefined,
+      // Mock ScanCommand - student does not exist
+      ddbMock.on(ScanCommand).resolves({
+        Items: [],
       });
 
       // Mock UpdateCommand - counter fails to return attributes
@@ -202,9 +203,9 @@ describe('Test create student handler', function () {
     it('should set default values for verificationStatus and consented', async () => {
       const studentPayload = createValidStudentPayload();
 
-      // Mock GetItemCommand
-      ddbMock.on(GetItemCommand).resolves({
-        Item: undefined,
+      // Mock ScanCommand - student does not exist
+      ddbMock.on(ScanCommand).resolves({
+        Items: [],
       });
 
       // Mock UpdateCommand

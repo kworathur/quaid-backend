@@ -4,12 +4,12 @@ import {
 } from 'aws-lambda';
 import {
   DynamoDBClient,
-  GetItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   PutCommand,
   UpdateCommand,
+  ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
@@ -129,23 +129,23 @@ export const handler = async (
 
         const email = body.email;
 
-        // check if a student already exists
+        // check if a student already exists by email
         try {
-          params = {
+          const scanParams = {
             TableName: tableName,
-            Key: {
-              email: {
-                S: email,
-              },
+            FilterExpression: 'email = :email',
+            ExpressionAttributeValues: {
+              ':email': email,
             },
           };
-          const data = await ddbDocClient.send(new GetItemCommand(params));
-          if (data?.Item) {
-            console.log('Found student ', data.Item);
+          const scanResult = await ddbDocClient.send(new ScanCommand(scanParams));
+          if (scanResult.Items && scanResult.Items.length > 0) {
+            const existingStudent = scanResult.Items[0];
+            console.log('Found student ', existingStudent);
             return {
               statusCode: 409,
               body: JSON.stringify({
-                url: encodeURI(`/students/${data.Item.id.S}`),
+                url: encodeURI(`/students/${existingStudent.id}`),
               }),
             };
           }

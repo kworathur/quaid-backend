@@ -2,6 +2,7 @@ node_modules
 .aws-sam/
 CLAUDE.md
 .vscode/
+.env
 
 .DS_Store
 .postman/
