@@ -255,35 +255,18 @@ jobs:
             --output text)
           echo "M2M_CLIENT_ID=${M2M_CLIENT_ID}" >> $GITHUB_OUTPUT
 
-          USER_POOL_ID=$(aws cloudformation describe-stacks \
-            --stack-name ${TESTING_STACK_NAME} \
-            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" \
-            --output text)
-          echo "USER_POOL_ID=${USER_POOL_ID}" >> $GITHUB_OUTPUT
-
           API_BASE_URL=$(aws cloudformation describe-stacks \
             --stack-name ${TESTING_STACK_NAME} \
             --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
             --output text)
           echo "API_BASE_URL=${API_BASE_URL}" >> $GITHUB_OUTPUT
 
-      - name: Get M2M client secret
-        id: m2m-secret
-        run: |
-          M2M_CLIENT_SECRET=$(aws cognito-idp describe-user-pool-client \
-            --user-pool-id ${{ steps.cfn-outputs.outputs.USER_POOL_ID }} \
-            --client-id ${{ steps.cfn-outputs.outputs.M2M_CLIENT_ID }} \
-            --query 'UserPoolClient.ClientSecret' \
-            --output text)
-          echo "::add-mask::${M2M_CLIENT_SECRET}"
-          echo "M2M_CLIENT_SECRET=${M2M_CLIENT_SECRET}" >> $GITHUB_OUTPUT
-
       - name: Run integration tests
         env:
           API_BASE_URL: ${{ steps.cfn-outputs.outputs.API_BASE_URL }}
           COGNITO_TOKEN_URL: ${{ steps.cfn-outputs.outputs.COGNITO_TOKEN_URL }}
           COGNITO_M2M_CLIENT_ID: ${{ steps.cfn-outputs.outputs.M2M_CLIENT_ID }}
-          COGNITO_M2M_CLIENT_SECRET: ${{ steps.m2m-secret.outputs.M2M_CLIENT_SECRET }}
+          COGNITO_M2M_CLIENT_SECRET: ${{ secrets.COGNITO_M2M_CLIENT_SECRET }}
         run: npm run test:integration
 
   deploy-prod:
