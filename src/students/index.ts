@@ -49,7 +49,7 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   // All log statements are written to CloudWatch
   console.info('received:', event);
-  var params;
+  let params;
   switch (event.httpMethod) {
     case 'GET':
       try {
@@ -150,10 +150,10 @@ export const handler = async (
             };
           }
         } catch (err) {
-          console.log('Error', (err as any).stack);
+          console.log('Error', err instanceof Error ? err.stack : err);
           return {
             statusCode: 400,
-            body: JSON.stringify({ error: (err as any).stack }),
+            body: JSON.stringify({ error: err instanceof Error ? err.stack : String(err) }),
           };
         }
 
@@ -217,10 +217,10 @@ export const handler = async (
             }),
           };
         } catch (err) {
-          console.log('Error', (err as any).stack);
+          console.log('Error', err instanceof Error ? err.stack : err);
           response = {
             statusCode: 400,
-            body: JSON.stringify({ error: (err as any).stack }),
+            body: JSON.stringify({ error: err instanceof Error ? err.stack : String(err) }),
           };
         }
 

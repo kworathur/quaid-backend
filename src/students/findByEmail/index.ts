@@ -2,7 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
   DynamoDBClient,
   GetItemCommand,
-  ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 const client = new DynamoDBClient({});
@@ -16,7 +15,7 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   // All log statements are written to CloudWatch
   console.info('received:', event);
-  var params;
+  let params;
   switch (event.httpMethod) {
     case 'GET':
       try {
@@ -52,7 +51,15 @@ export const handler = async (
             }),
           };
         }
-      } catch {}
+      } catch (error) {
+        console.error('Error fetching student by email:', error);
+        return {
+          statusCode: 500,
+          body: JSON.stringify({
+            error: 'Internal server error',
+          }),
+        };
+      }
     default:
       throw new Error(
         `Unsupported method : ${event.httpMethod}. Accepted methods are GET`,
