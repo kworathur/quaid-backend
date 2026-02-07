@@ -309,6 +309,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /students/{studentId}/checks:
+    get:
+      tags:
+        - check
+      summary: get a list of completed and in progress checks for a student
+      operationId: getChecks
+
   /students/{studentId}/checks/addressLiveness:
     post:
       tags:
@@ -367,6 +374,176 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /students/{studentId}/checks/postSanityChecks:
+    post:
+      tags:
+        - check
+      summary: Perform a sanity check of a student's program of study based on a student's age.
+      description: Updates postSanityCheck indicator in indicators. Note that this sanity check is implemented synchronously.
+      operationId: postSanityChecks
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to perform a sanity check against
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
+
+      responses:
+        '200':
+          description: Sanity check complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: 'Program of study sanity check complete'
+
+        '400':
+          description: invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                StudentDidNotConsent:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student did not consent to background checks
+        '404':
+          description: student with provided ID not found
+        '409':
+          description: a program of study sanity check for this student has already been completed. Delete the check and try again.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /students/{studentId}/checks/investigateAttendance:
+    post:
+      tags:
+        - check
+      summary: Calculate attendance rate and class participation for a student.
+      description: Substitutes data from learning management systems and piazza with synthetic data
+      operationId: investigateAttendance
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to perform an inquiry against
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
+
+      responses:
+        '200':
+          description: Inquiry is being processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: '24a0d969-f8f3-4a7b-b685-f25343caefad'
+        '400':
+          description: invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                StudentDidNotConsent:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student did not consent to background checks
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student's address in students table does not match address on FAFSA application
+        '404':
+          description: student with provided ID not found
+        '409':
+          description: an address liveness check for this student is already in the queue
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /students/{studentId}/checks/blackListSSNs:
+    post:
+      tags:
+        - check
+      summary: Check if a student's SSN appears in a list of blacklisted SSNs.
+      operationId: checkAddressLiveness
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to perform an inquiry against
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
+
+      responses:
+        '200':
+          description: Inquiry is being processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: 'success'
+                statusCode: 200
+                message: '24a0d969-f8f3-4a7b-b685-f25343caefad'
+        '400':
+          description: invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                StudentDidNotConsent:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Student did not consent to background checks
+                AddressMistmach:
+                  value:
+                    status: 'error'
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: An SSN has not been provided for this student
+        '404':
+          description: student with provided ID not found
+        '409':
+          description: an address liveness check for this student is already in the queue
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /students/{studentId}/checks/{checkId}/status:
     get:
       tags:
@@ -412,7 +589,7 @@ paths:
   /students/{studentId}/applications:
     post:
       tags:
-        - app
+        - applications
       summary: Create a new financial aid application for a student
       operationId: createNewApplication
       requestBody:
