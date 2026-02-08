@@ -29,8 +29,8 @@ Parameters:
       - prod
   MelissaApiKeyParameterName:
     Type: String
-    Default: /quaid/melissa-api-key
-    Description: SSM Parameter Store name for Melissa API key
+    Default: quaid/melissa-api-key
+    Description: SSM Parameter Store name for Melissa API key (without leading /)
 Conditions:
   IsProd: !Equals [!Ref EnvironmentType, 'prod']
 
@@ -398,7 +398,7 @@ Resources:
           STUDENTS_TABLE: !Ref StudentsTable
           APPLICATIONS_TABLE: !Ref ApplicationsTable
           INQUIRIES_TABLE: !Ref InquiriesTable
-          MELISSA_API_KEY_PARAM: !Ref MelissaApiKeyParameterName
+          MELISSA_API_KEY_PARAM: !Sub /${MelissaApiKeyParameterName}
       Events:
         SQSEvent:
           Type: SQS
