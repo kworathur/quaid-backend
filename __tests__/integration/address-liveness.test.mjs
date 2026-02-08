@@ -214,13 +214,19 @@ describe('Address Liveness Integration Tests', () => {
     expect(studentId).toBeDefined();
 
     const response = await apiRequest('POST', `/students/${studentId}/applications`, {
-      academicYear: '2024-2025',
-      addressLine1: TEST_ADDRESS.street,
+      fafsa_id: `FAFSA-${testTimestamp}`,
+      first_name: 'Integration',
+      last_name: 'Test',
+      street_address: TEST_ADDRESS.street,
       city: TEST_ADDRESS.city,
-      state: TEST_ADDRESS.state,
-      zipCode: TEST_ADDRESS.zip
+      mailing_state: TEST_ADDRESS.state,
+      zip_code: TEST_ADDRESS.zip,
+      date_of_birth: '2000-01-15'
     });
 
+    if (response.status !== 201) {
+      console.error('Create application failed:', JSON.stringify(response.body, null, 2));
+    }
     expect(response.status).toBe(201);
   });
 
