@@ -235,11 +235,15 @@ describe('Address Liveness Integration Tests', () => {
 
     const response = await apiRequest('POST', `/students/${studentId}/checks/addressLiveness`);
 
+    if (response.status !== 200) {
+      console.error('Initiate address liveness check failed:', JSON.stringify(response.body, null, 2));
+    }
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('QUEUED');
-    expect(response.body.inquiryId).toBeDefined();
+    expect(response.body.status).toBe('success');
+    expect(response.body.data.status).toBe('QUEUED');
+    expect(response.body.data.inquiryId).toBeDefined();
 
-    inquiryId = response.body.inquiryId;
+    inquiryId = response.body.data.inquiryId;
   });
 
   test('should complete address liveness check with Melissa verification result', async () => {
