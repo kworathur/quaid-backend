@@ -391,8 +391,12 @@ Resources:
             TableName: !Ref ApplicationsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref InquiriesTable
-        - SSMParameterReadPolicy:
-            ParameterName: !Ref MelissaApiKeyParameterName
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${MelissaApiKeyParameterName}
       Environment:
         Variables:
           STUDENTS_TABLE: !Ref StudentsTable
