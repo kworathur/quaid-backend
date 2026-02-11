@@ -127,14 +127,14 @@ async function pollForCompletion(studentId, checkId) {
       throw new Error(`Failed to get check status: ${response.status} - ${JSON.stringify(response.body)}`);
     }
 
-    const { status, result } = response.body;
+    const { status, result } = response.body.data;
 
     if (status === 'COMPLETED') {
       return { status, result };
     }
 
     if (status === 'FAILED') {
-      throw new Error(`Check failed: ${JSON.stringify(response.body)}`);
+      throw new Error(`Check failed: ${JSON.stringify(response.body.data)}`);
     }
 
     // Wait before next poll
