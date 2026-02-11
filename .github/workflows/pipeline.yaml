@@ -221,7 +221,7 @@ jobs:
         run: |
           sam deploy --stack-name ${TESTING_STACK_NAME} \
             --template packaged-testing.yaml \
-            --parameter-overrides Email=kworathur3@gatech.edu EnvironmentType=dev CallbackUrl=https://oauth.pstmn.io/v1/callback \
+            --parameter-overrides Email=kworathur3@gatech.edu EnvironmentType=dev CallbackUrl=https://oauth.pstmn.io/v1/callback MelissaApiKeyParameterName=quaid/melissa-api-key \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
@@ -312,7 +312,7 @@ jobs:
         run: |
           sam deploy --stack-name ${PROD_STACK_NAME} \
             --template packaged-prod.yaml \
-            --parameter-overrides Email=keshavworathur@gmail.com EnvironmentType=prod CallbackUrl=https://oauth.pstmn.io/v1/callback CertificateArn=arn:aws:acm:us-east-1:705948898164:certificate/ea028d43-5982-4b5a-a28e-798ff22f315e \
+            --parameter-overrides Email=keshavworathur@gmail.com EnvironmentType=prod CallbackUrl=https://oauth.pstmn.io/v1/callback CertificateArn=arn:aws:acm:us-east-1:705948898164:certificate/ea028d43-5982-4b5a-a28e-798ff22f315e MelissaApiKeyParameterName=quaid/melissa-api-key \
             --capabilities CAPABILITY_IAM \
             --region ${PROD_REGION} \
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
