@@ -40,8 +40,11 @@ Conditions:
 Resources:
   CognitoAuthorizerUserPool:
     Type: AWS::Cognito::UserPool
+    DependsOn: advisingPreTokenFunction
     Properties:
       UserPoolName: !Sub ${AWS::StackName}-userpool
+      LambdaConfig:
+        PreTokenGeneration: !GetAtt advisingPreTokenFunction.Arn
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
 
@@ -79,6 +82,12 @@ Resources:
       Scopes:
         - ScopeDescription: scope_description
           ScopeName: scope1
+        - ScopeDescription: Student advising scope
+          ScopeName: advising.student
+        - ScopeDescription: Advisor advising scope
+          ScopeName: advising.advisor
+        - ScopeDescription: Admin advising scope
+          ScopeName: advising.admin
       UserPoolId: !Ref CognitoAuthorizerUserPool
 
   CognitoAuthorizerUserPoolDomain:
@@ -391,12 +400,8 @@ Resources:
             TableName: !Ref ApplicationsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref InquiriesTable
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - ssm:GetParameter
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${MelissaApiKeyParameterName}
+        - SSMParameterReadPolicy:
+            ParameterName: !Ref MelissaApiKeyParameterName
       Environment:
         Variables:
           STUDENTS_TABLE: !Ref StudentsTable
@@ -517,6 +522,767 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt AddressLivenessDeadLetterQueue.Arn
         maxReceiveCount: 3
+
+  # ── Advising Feature ─────────────────────────────────────────────────────────
+
+  # Cognito Groups
+  AdvisingStudentGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: advising-student
+      Description: Enrolled students using the advising feature
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+
+  AdvisingAdvisorGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: advising-advisor
+      Description: Academic advisors
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+
+  AdvisingAdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: advising-admin
+      Description: System administrators for advising
+      UserPoolId: !Ref CognitoAuthorizerUserPool
+
+  # Permission for Cognito to invoke the pre-token generation Lambda
+  AdvisingPreTokenLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt advisingPreTokenFunction.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoAuthorizerUserPool.Arn
+
+  # Pre-token generation Lambda (must exist before UserPool references it via DependsOn)
+  advisingPreTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/cognito/preTokenGeneration/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 10
+      Description: Inject advising resource-server scopes into Cognito JWT tokens.
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  # DynamoDB Tables
+  AdvisingSlotsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-AdvisingSlotsTable
+      AttributeDefinitions:
+        - AttributeName: slotId
+          AttributeType: S
+        - AttributeName: advisorId
+          AttributeType: S
+        - AttributeName: slotDateTime
+          AttributeType: S
+        - AttributeName: studentId
+          AttributeType: N
+      KeySchema:
+        - AttributeName: slotId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: advisorId-slotDateTime-index
+          KeySchema:
+            - AttributeName: advisorId
+              KeyType: HASH
+            - AttributeName: slotDateTime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 2
+        - IndexName: studentId-slotDateTime-index
+          KeySchema:
+            - AttributeName: studentId
+              KeyType: HASH
+            - AttributeName: slotDateTime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 2
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  AdvisingInsightsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-AdvisingInsightsTable
+      AttributeDefinitions:
+        - AttributeName: insightId
+          AttributeType: S
+        - AttributeName: advisorId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: insightId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: advisorId-index
+          KeySchema:
+            - AttributeName: advisorId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 2
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  AdvisingRulesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-AdvisingRulesTable
+      AttributeDefinitions:
+        - AttributeName: ruleId
+          AttributeType: S
+        - AttributeName: advisorId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ruleId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: advisorId-index
+          KeySchema:
+            - AttributeName: advisorId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 2
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  AdvisingConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-AdvisingConfigTable
+      AttributeDefinitions:
+        - AttributeName: configKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: configKey
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  # ── Student-scoped Lambda functions ─────────────────────────────────────────
+
+  getAssignedAdvisorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/advisor/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Return the student's assigned advisor based on assignment rules.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingRulesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+      Environment:
+        Variables:
+          ADVISING_RULES_TABLE: !Ref AdvisingRulesTable
+          STUDENTS_TABLE: !Ref StudentsTable
+      Events:
+        GetAdvisor:
+          Type: Api
+          Properties:
+            Path: /advising/advisor
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.student
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  getAdvisorAvailabilityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/availability/_advisorId/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Return open slots for a given advisor in the next 2 weeks.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingSlotsTable
+      Environment:
+        Variables:
+          ADVISING_SLOTS_TABLE: !Ref AdvisingSlotsTable
+      Events:
+        GetAvailability:
+          Type: Api
+          Properties:
+            Path: /advising/availability/{advisorId}
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.student
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  createBookingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/bookings/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Book an advising slot (1/week limit, atomic conditional update).
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingSlotsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingConfigTable
+      Environment:
+        Variables:
+          ADVISING_SLOTS_TABLE: !Ref AdvisingSlotsTable
+          ADVISING_CONFIG_TABLE: !Ref AdvisingConfigTable
+      Events:
+        CreateBooking:
+          Type: Api
+          Properties:
+            Path: /advising/bookings
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.student
+        GetBookings:
+          Type: Api
+          Properties:
+            Path: /advising/bookings
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.student
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  cancelBookingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/bookings/_bookingId/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Cancel a student's booking (conditional update).
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingSlotsTable
+      Environment:
+        Variables:
+          ADVISING_SLOTS_TABLE: !Ref AdvisingSlotsTable
+      Events:
+        CancelBooking:
+          Type: Api
+          Properties:
+            Path: /advising/bookings/{bookingId}
+            Method: DELETE
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.student
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  # ── Advisor-scoped Lambda functions ─────────────────────────────────────────
+
+  setAdvisorAvailabilityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/availability/_weekStartDate/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Bulk-create/replace advisor availability slots for a given week.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingSlotsTable
+      Environment:
+        Variables:
+          ADVISING_SLOTS_TABLE: !Ref AdvisingSlotsTable
+      Events:
+        SetAvailability:
+          Type: Api
+          Properties:
+            Path: /advising/availability/{weekStartDate}
+            Method: PUT
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  getAdvisorSessionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/sessions/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Return all booked sessions for the caller advisor (current + next week).
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingSlotsTable
+      Environment:
+        Variables:
+          ADVISING_SLOTS_TABLE: !Ref AdvisingSlotsTable
+      Events:
+        GetSessions:
+          Type: Api
+          Properties:
+            Path: /advising/sessions
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  crudInsightsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/insights/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Create or list advisor insights.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingInsightsTable
+      Environment:
+        Variables:
+          ADVISING_INSIGHTS_TABLE: !Ref AdvisingInsightsTable
+      Events:
+        CreateInsight:
+          Type: Api
+          Properties:
+            Path: /advising/insights
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+        ListInsights:
+          Type: Api
+          Properties:
+            Path: /advising/insights
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  crudInsightByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/insights/_insightId/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Read, update, or delete a single insight.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingInsightsTable
+      Environment:
+        Variables:
+          ADVISING_INSIGHTS_TABLE: !Ref AdvisingInsightsTable
+      Events:
+        GetInsight:
+          Type: Api
+          Properties:
+            Path: /advising/insights/{insightId}
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+        UpdateInsight:
+          Type: Api
+          Properties:
+            Path: /advising/insights/{insightId}
+            Method: PUT
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+        DeleteInsight:
+          Type: Api
+          Properties:
+            Path: /advising/insights/{insightId}
+            Method: DELETE
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  executeInsightFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/insights/_insightId/execute/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 256
+      Timeout: 30
+      Description: Execute an insight query against DegreeWorks via RDS Data API.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingInsightsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+              Resource: !GetAtt DegreeWorksCluster.DBClusterArn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref DegreeWorksSecret
+      Environment:
+        Variables:
+          ADVISING_INSIGHTS_TABLE: !Ref AdvisingInsightsTable
+          DEGREE_WORKS_CLUSTER_ARN: !GetAtt DegreeWorksCluster.DBClusterArn
+          DEGREE_WORKS_SECRET_ARN: !Ref DegreeWorksSecret
+          DEGREE_WORKS_DB_NAME: degreeworks
+      Events:
+        ExecuteInsight:
+          Type: Api
+          Properties:
+            Path: /advising/insights/{insightId}/execute
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.advisor
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  # ── Admin-scoped Lambda functions ────────────────────────────────────────────
+
+  crudAssignmentRulesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/admin/rules/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Create or list advisor assignment rules.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingRulesTable
+      Environment:
+        Variables:
+          ADVISING_RULES_TABLE: !Ref AdvisingRulesTable
+      Events:
+        CreateRule:
+          Type: Api
+          Properties:
+            Path: /advising/admin/rules
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+        ListRules:
+          Type: Api
+          Properties:
+            Path: /advising/admin/rules
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  crudAssignmentRuleByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/admin/rules/_ruleId/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Update or delete an advisor assignment rule.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingRulesTable
+      Environment:
+        Variables:
+          ADVISING_RULES_TABLE: !Ref AdvisingRulesTable
+      Events:
+        UpdateRule:
+          Type: Api
+          Properties:
+            Path: /advising/admin/rules/{ruleId}
+            Method: PUT
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+        DeleteRule:
+          Type: Api
+          Properties:
+            Path: /advising/admin/rules/{ruleId}
+            Method: DELETE
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  updateAdvisingConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/admin/config/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Read or update global advising configuration (pause/unpause).
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingConfigTable
+      Environment:
+        Variables:
+          ADVISING_CONFIG_TABLE: !Ref AdvisingConfigTable
+      Events:
+        GetConfig:
+          Type: Api
+          Properties:
+            Path: /advising/admin/config
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+        UpdateConfig:
+          Type: Api
+          Properties:
+            Path: /advising/admin/config
+            Method: PUT
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  # ── DegreeWorks Aurora Serverless v2 Infrastructure ──────────────────────────
+
+  DegreeWorksSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AWS::StackName}-DegreeWorksSecret
+      Description: Master credentials for the DegreeWorks Aurora cluster
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "degreeworks_admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  DegreeWorksCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: '15.4'
+      DatabaseName: degreeworks
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DegreeWorksSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DegreeWorksSecret}:SecretString:password}}'
+      EnableHttpEndpoint: true
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 4
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+  DegreeWorksDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref DegreeWorksCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+  setupDegreeWorksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/degreeworks/setup/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 256
+      Timeout: 300
+      Description: CloudFormation Custom Resource — runs DegreeWorks schema and seed SQL.
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+              Resource: !GetAtt DegreeWorksCluster.DBClusterArn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref DegreeWorksSecret
+      Environment:
+        Variables:
+          DEGREE_WORKS_CLUSTER_ARN: !GetAtt DegreeWorksCluster.DBClusterArn
+          DEGREE_WORKS_SECRET_ARN: !Ref DegreeWorksSecret
+          DEGREE_WORKS_DB_NAME: degreeworks
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  DegreeWorksSetupResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: DegreeWorksDBInstance
+    Properties:
+      ServiceToken: !GetAtt setupDegreeWorksFunction.Arn
 
 Outputs:
   ApiUrl:
