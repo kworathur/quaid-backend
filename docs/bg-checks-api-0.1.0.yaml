@@ -748,6 +748,29 @@ components:
           schema: $ref '#/components/schemas/VerificationStatus'
         consented:
           type: boolean
+    AdvisingInsight:
+      required:
+        - insightName
+        - columns
+        - expression
+        - messageTemplate
+      type: object
+      properties:
+        insight_name:
+          type: string
+          description: The name of the insight (e.g. suggested_threads)
+        columns:
+          type: string
+          description: Columns in Banner Degree works used to compute the insight
+        expression:
+          type: string
+          enum:
+            - lt
+            - gt
+            - eq
+        message_template:
+          type: string
+          description: message template to display in banner
     Status:
       type: string
       enum:
