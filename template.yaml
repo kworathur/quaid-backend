@@ -40,7 +40,6 @@ Conditions:
 Resources:
   CognitoAuthorizerUserPool:
     Type: AWS::Cognito::UserPool
-    DependsOn: advisingPreTokenFunction
     Properties:
       UserPoolName: !Sub ${AWS::StackName}-userpool
       LambdaConfig:
@@ -511,7 +510,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub ${AWS::StackName}-AddressLivenessDLQ
-      MessageRetentionPeriod: 1209600  # 14 days
+      MessageRetentionPeriod: 1209600 # 14 days
 
   # SQS Queue for address liveness check processing
   AddressLivenessQueue:
@@ -717,6 +716,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.student
     Metadata:
@@ -753,6 +753,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.student
     Metadata:
@@ -792,6 +793,7 @@ Resources:
             Method: POST
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.student
         GetBookings:
@@ -801,6 +803,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.student
     Metadata:
@@ -837,6 +840,7 @@ Resources:
             Method: DELETE
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.student
     Metadata:
@@ -875,6 +879,7 @@ Resources:
             Method: PUT
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
     Metadata:
@@ -911,6 +916,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
     Metadata:
@@ -947,6 +953,7 @@ Resources:
             Method: POST
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
         ListInsights:
@@ -956,6 +963,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
     Metadata:
@@ -992,6 +1000,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
         UpdateInsight:
@@ -1001,6 +1010,7 @@ Resources:
             Method: PUT
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
         DeleteInsight:
@@ -1010,6 +1020,7 @@ Resources:
             Method: DELETE
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
     Metadata:
@@ -1058,6 +1069,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.advisor
     Metadata:
@@ -1096,6 +1108,7 @@ Resources:
             Method: POST
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.admin
         ListRules:
@@ -1105,6 +1118,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.admin
     Metadata:
@@ -1141,6 +1155,7 @@ Resources:
             Method: PUT
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.admin
         DeleteRule:
@@ -1150,6 +1165,7 @@ Resources:
             Method: DELETE
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.admin
     Metadata:
@@ -1186,6 +1202,7 @@ Resources:
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.admin
         UpdateConfig:
@@ -1195,6 +1212,7 @@ Resources:
             Method: PUT
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
+              Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.admin
     Metadata:
