@@ -621,6 +621,91 @@ paths:
               parents_asset_threshold_exceeded: 'N'
               appid: 1234
 
+  /advising/admin/config:
+    get:
+      summary: retrieve the value of a flag in the application's global config for advising.
+      operationId: getConfig
+      responses:
+        '200':
+          description: Task status returned successfully
+          content:
+            application/json:
+              examples:
+                Default:
+                  configKey: 'ADVISING_PAUSED'
+                  value: false
+                  reason: ''
+    put:
+      summary: update the value of a flag in the application's global config for advising.
+      operationId: updateConfig
+      parameters:
+        - name: value
+          in: body
+          description: new configuration value
+          required: true
+          schema:
+            type: string
+        - name: reason
+          in: body
+          description: update reason
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Advising configuration updated successfully
+          content:
+            application/json:
+              example:
+                message: 'Advising paused'
+                configKey: 'ADVISING_PAUSED'
+                value: true
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /advising/admin/rules:
+    get:
+      summary: list all rules for assigning advisors to students
+      operationId: getRules
+      responses:
+        '200':
+          description: Returned all advising-student mapping rules successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdvisingRule'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationParams'
+                  links:
+                    $ref: '#/components/schemas/PaginationLinks'
+
+    post:
+      summary: create a new rule for assigning advisors to students
+
+  /advising/admin/rules/{ruleId}:
+
+  /advising/advisor:
+
+  /advising/availability/{advisorId}:
+
+  /advising/bookings/{bookingId}:
+
+  /advising/insights/{insightId}:
+
+  /advising/insights/execute:
+
+  /advising/sessions:
+
+  /degreeworks/setup:
+
 components:
   schemas:
     # MockStudent is a placeholder for student data that will later be accessed via SIS
@@ -748,6 +833,56 @@ components:
           schema: $ref '#/components/schemas/VerificationStatus'
         consented:
           type: boolean
+    MockStudent:
+      required:
+        - email
+        - address
+        - birthdate
+        - level_of_study
+      type: object
+      properties:
+        studentId:
+          type: integer
+          description: Student's unique identifier (Implementation note- currently generated in DynamoDB, later will be foreign keys to SIS database)
+        email:
+          type: string
+          examples: [kworathur3@gatech.edu]
+        address:
+          type: string
+          examples: ['123 Cherry St., Atlanta GA, 30309']
+        birthdate:
+          type: string
+          examples: ['2002-04-12']
+        level_of_study:
+          type: string
+          description: student level of study
+          example: BACHELORS
+          enum:
+            - BACHELORS
+            - MASTERS
+            - DOCTORAL
+        verificationStatus:
+          schema: $ref '#/components/schemas/VerificationStatus'
+        consented:
+          type: boolean
+    AdvisingRule:
+      required: 
+        - advisorId
+        - conditionType
+        - parameters
+        - priority
+        - isActive
+      type: object
+      properties:
+        advisorId:
+          type: number
+          description: the advisor's ID
+        conditionType:
+          type: string
+          description: Type of condition used for assigning advisors to students (e.g. range condition).
+          enum:
+            - LAST_NAME_RANGE
+          
     AdvisingInsight:
       required:
         - insightName
@@ -756,7 +891,7 @@ components:
         - messageTemplate
       type: object
       properties:
-        insight_name:
+        insightName:
           type: string
           description: The name of the insight (e.g. suggested_threads)
         columns:
@@ -845,5 +980,6 @@ components:
           authorizationUrl: https://user-pool-domain-705948898164.auth.us-east-1.amazoncognito.com/oauth2/authorize
           tokenUrl: https://user-pool-domain-705948898164.auth.us-east-1.amazoncognito.com/oauth2/token
           scopes:
-            'write:students': modify students in your SIS instance (only for placing holds)
-            'read:students': read student data from your SIS
+            'com.apigw/advising.student': student that can book advising appointments
+            'com.apigw/advising.advisor': advisor that can indicate availability for appointments
+            'com.apigw/advising.admin': administrator that can control advising insights and availability
