@@ -25,6 +25,8 @@ tags:
     description: An need-based financial aid application for a student
   - name: check
     description: Background checks on students and their financial aid applications.
+  - name: advising
+    description: Advising appointments booking
 paths:
   /students:
     get:
@@ -128,6 +130,7 @@ paths:
                       code: CONFLICT
                       message: A student with this email address already exists
         default:
+          description: unexpected error
           content:
             application/json:
               schema:
@@ -304,6 +307,7 @@ paths:
         '404':
           description: student with provided ID not found
         default:
+          description: default error response
           content:
             application/json:
               schema:
@@ -315,6 +319,15 @@ paths:
         - check
       summary: get a list of completed and in progress checks for a student
       operationId: getChecks
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to perform an inquiry against
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
 
   /students/{studentId}/checks/addressLiveness:
     post:
@@ -369,6 +382,7 @@ paths:
         '409':
           description: an address liveness check for this student is already in the queue
         default:
+          description: default error response
           content:
             application/json:
               schema:
@@ -422,6 +436,7 @@ paths:
         '409':
           description: a program of study sanity check for this student has already been completed. Delete the check and try again.
         default:
+          description: default error response
           content:
             application/json:
               schema:
@@ -481,6 +496,7 @@ paths:
         '409':
           description: an address liveness check for this student is already in the queue
         default:
+          description: default error response
           content:
             application/json:
               schema:
@@ -491,7 +507,7 @@ paths:
       tags:
         - check
       summary: Check if a student's SSN appears in a list of blacklisted SSNs.
-      operationId: checkAddressLiveness
+      operationId: blackListSSNs
       parameters:
         - name: studentId
           in: path
@@ -539,6 +555,7 @@ paths:
         '409':
           description: an address liveness check for this student is already in the queue
         default:
+          description: default error template
           content:
             application/json:
               schema:
@@ -581,6 +598,7 @@ paths:
         '404':
           description: task with provided ID not found
         default:
+          description: default error response
           content:
             application/json:
               schema:
@@ -592,6 +610,15 @@ paths:
         - applications
       summary: Create a new financial aid application for a student
       operationId: createNewApplication
+      parameters:
+        - name: studentId
+          in: path
+          description: ID of student to update
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 55
       requestBody:
         content:
           application/octet-stream:
@@ -623,6 +650,8 @@ paths:
 
   /advising/admin/config:
     get:
+      tags:
+        - advising
       summary: retrieve the value of a flag in the application's global config for advising.
       operationId: getConfig
       responses:
@@ -630,37 +659,51 @@ paths:
           description: Task status returned successfully
           content:
             application/json:
+              schema:
+                $ref: '#/components/schemas/AdvisingSystemConfig'
               examples:
-                Default:
-                  configKey: 'ADVISING_PAUSED'
-                  value: false
-                  reason: ''
+                UpdateSuccess:
+                  value:
+                    configKey: 'ADVISING_PAUSED'
+                    value: false
+                    reason: 'registration for phase I now open'
     put:
-      summary: update the value of a flag in the application's global config for advising.
+      tags:
+        - advising
+      summary: Update the value of a flag in the application's global config for advising.
       operationId: updateConfig
-      parameters:
-        - name: value
-          in: body
-          description: new configuration value
-          required: true
-          schema:
-            type: string
-        - name: reason
-          in: body
-          description: update reason
-          required: false
-          schema:
-            type: string
+      requestBody:
+        content:
+          application/json:
+            example:
+              value: ADVISING_PAUSED
+              reason: Registration now open
       responses:
         '200':
           description: Advising configuration updated successfully
           content:
             application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              examples:
+                AdvisingPaused:
+                  value:
+                    status: UPDATED
+                    statusCode: 200
+                    message:
+                      message: 'Advising paused'
+                      configKey: 'ADVISING_PAUSED'
+                      value: true
+        '400':
+          description: bad request - advising key not defined for this environment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
               example:
-                message: 'Advising paused'
-                configKey: 'ADVISING_PAUSED'
-                value: true
+                message: this key does cannot be updated or does not exist
         default:
+          description: unexpected application error
           content:
             application/json:
               schema:
@@ -668,6 +711,8 @@ paths:
 
   /advising/admin/rules:
     get:
+      tags:
+        - advising
       summary: list all rules for assigning advisors to students
       operationId: getRules
       responses:
@@ -686,11 +731,83 @@ paths:
                     $ref: '#/components/schemas/PaginationParams'
                   links:
                     $ref: '#/components/schemas/PaginationLinks'
+        '400':
+          description: failed to list all advisor-advisee mappings
 
     post:
+      tags:
+        - advising
       summary: create a new rule for assigning advisors to students
+      operationId: createAdvisingRule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdvisingRule'
+      responses:
+        '200':
+          description: advisor-advisee mapping rule was created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: CREATED
+                statusCode: 200
+                message:
+                  message: the advising rule mapping students with last names in A-Z to advisor 4 was added successfully.
+        '400':
+          description: advisor-advisee mapping is malformed
+          content:
+            application/json:
+              examples:
+                InvalidAdvisor:
+                  value:
+                    message: an advisor with ID 4 does not exist
 
   /advising/admin/rules/{ruleId}:
+    put:
+      tags:
+        - advising
+      summary: Update an advisor-advisee mapping.
+      description: update the condition type, parameters, or priority of an advising rule
+      operationId: updateAdvisingRule
+      parameters:
+        - name: ruleId
+          in: path
+          description: ID of the advising rule to update
+          required: true
+          schema:
+            type: number
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAdvisingRule'
+            example:
+              - conditionType: PROGRAM_OF_STUDY
+      responses:
+        '200':
+          description: successfully updated mapping of advisor to students.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                status: UPDATED
+                statusCode: 200
+                message: mapping updated successfully.
+        '400':
+          description: malformed advisor-advisee mapping.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                InvalidConditionType:
+                  value:
+                    code: BAD_REQUEST
+                    data: invalid conditionType DATE_OF_BIRTH
 
   /advising/advisor:
 
@@ -830,10 +947,29 @@ components:
             - MASTERS
             - DOCTORAL
         verificationStatus:
-          schema: $ref '#/components/schemas/VerificationStatus'
+          $schema: $ref '#/components/schemas/VerificationStatus'
         consented:
           type: boolean
-    MockStudent:
+    AdvisingSystemConfig:
+      type: object
+      properties:
+        configKey:
+          type: string
+          description: value of the flag to update
+          example: 'ADVISING_PAUSED'
+        value:
+          type: boolean
+          description: value of the new flag
+        reason:
+          type: string
+          description: reason for updating the flag
+          example: registration for phase I now open
+
+      required:
+        - configKey
+        - value
+        - reason
+    Advisor:
       required:
         - email
         - address
@@ -862,27 +998,47 @@ components:
             - MASTERS
             - DOCTORAL
         verificationStatus:
-          schema: $ref '#/components/schemas/VerificationStatus'
+          $schema: $ref '#/components/schemas/VerificationStatus'
         consented:
           type: boolean
+
     AdvisingRule:
-      required: 
+      required:
         - advisorId
-        - conditionType
-        - parameters
-        - priority
-        - isActive
       type: object
       properties:
         advisorId:
           type: number
           description: the advisor's ID
+          example: 12345
         conditionType:
           type: string
           description: Type of condition used for assigning advisors to students (e.g. range condition).
           enum:
             - LAST_NAME_RANGE
-          
+        parameters:
+          type: object
+          description: list of the parameters used to execute the mapping and their corresponding values
+          example:
+            { students.last_name: 'string', students.year_of_study: 'number' }
+        priority:
+          type: number
+          description: priority for evaluating the rule. A lower number indicates a higher priority
+          minimum: 1
+        isActive:
+          type: boolean
+          description: whether or not the advising mapping is active.
+
+    UpdateAdvisingRule:
+      type: object
+      required:
+        - conditionType
+        - parameters
+        - priority
+        - isActive
+      properties:
+        $ref: '#/components/schemas/AdvisingRule'
+
     AdvisingInsight:
       required:
         - insightName
@@ -922,13 +1078,11 @@ components:
         statusCode:
           $ref: '#/components/schemas/StatusCode'
         message:
-          type: string
-
+          type: [string, object]
       required:
         - status
         - statusCode
         - message
-
     Error:
       type: object
       properties:
