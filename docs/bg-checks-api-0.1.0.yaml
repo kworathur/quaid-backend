@@ -809,19 +809,19 @@ paths:
                     code: BAD_REQUEST
                     data: invalid conditionType DATE_OF_BIRTH
 
-  /advising/advisor:
+  /advising/advisor: {}
 
-  /advising/availability/{advisorId}:
+  /advising/availability/{advisorId}: {}
 
-  /advising/bookings/{bookingId}:
+  /advising/bookings/{bookingId}: {}
 
-  /advising/insights/{insightId}:
+  /advising/insights/{insightId}: {}
 
-  /advising/insights/execute:
+  /advising/insights/execute: {}
 
-  /advising/sessions:
+  /advising/sessions: {}
 
-  /degreeworks/setup:
+  /degreeworks/setup: {}
 
 components:
   schemas:
@@ -1003,9 +1003,9 @@ components:
           type: boolean
 
     AdvisingRule:
+      type: object
       required:
         - advisorId
-      type: object
       properties:
         advisorId:
           type: number
@@ -1036,8 +1036,8 @@ components:
         - parameters
         - priority
         - isActive
-      properties:
-        $ref: '#/components/schemas/AdvisingRule'
+      allOf:
+        - $ref: '#/components/schemas/AdvisingRule'
 
     AdvisingInsight:
       required:
