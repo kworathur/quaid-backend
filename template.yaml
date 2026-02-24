@@ -749,7 +749,7 @@ Resources:
         GetAvailability:
           Type: Api
           Properties:
-            Path: /advising/availability/{advisorId}
+            Path: /advising/availability/advisor/{advisorId}
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
@@ -875,7 +875,7 @@ Resources:
         SetAvailability:
           Type: Api
           Properties:
-            Path: /advising/availability/{weekStartDate}
+            Path: /advising/availability/week/{weekStartDate}
             Method: PUT
             RestApiId: !Ref BackgroundChecksAPI
             Auth:

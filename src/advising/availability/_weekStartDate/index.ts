@@ -1,5 +1,5 @@
 /**
- * PUT /advising/availability/{weekStartDate}
+ * PUT /advising/availability/week/{weekStartDate}
  * Scope: com.apigw/advising.advisor
  *
  * Bulk-creates or replaces advisor availability slots for a given week.

@@ -1,5 +1,5 @@
 /**
- * GET /advising/availability/{advisorId}
+ * GET /advising/availability/advisor/{advisorId}
  * Scope: com.apigw/advising.student
  *
  * Returns AVAILABLE slots for the given advisor in the next 2 weeks.

@@ -809,19 +809,78 @@ paths:
                     code: BAD_REQUEST
                     data: invalid conditionType DATE_OF_BIRTH
 
-  /advising/advisor: {}
+  /advising/advisor:
+    get:
+      description: find the advisor for the current student using the advisor-advisee mappings
+      operationId: getLoggedInUserAdvisor
+      responses:
+        '200':
+          description: found assigned advisor for the student
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseApiResponse'
+              example:
+                statusCode: 200
+                message:
+                  advisorId: assignedAdvisorId
 
-  /advising/availability/{advisorId}: {}
+  /advising/availability/advisor/{advisorId}:
+    get:
+      description: get available slots for a given advisor in the next two weeks
+      operationId: getAdvisorAvailability
 
-  /advising/bookings/{bookingId}: {}
+  /advising/availability/week/{weekStartDate}:
+    get:
+      description: bulk create or replace advisor availability slots for a given week
+      operationId: createAdvisorAvailability
 
-  /advising/insights/{insightId}: {}
+  /advising/bookings/{bookingId}:
+    delete:
+      description: cancel an advisor booking
+      operationId: deleteAdvisorBooking
 
-  /advising/insights/execute: {}
+  /advising/bookings:
+    get:
+      description: list a student's booked advising sessions
+      operationId: getBookings
+    post:
+      description: book an advising slot
+      operationId: bookAdvisingSlot
 
-  /advising/sessions: {}
+  /advising/insights/{insightId}:
+    get:
+      description: read an advising insight
+      operationId: getAdvisingInsight
+    put:
+      description: update an advising insight for a student
+      operationId: putAdvisingInsight
+    delete:
+      description: delete an advising insight
+      operationId: deleteAdvisingInsight
 
-  /degreeworks/setup: {}
+  /advising/insights:
+    get:
+      description: list an advisor's insights
+      operationId: listAdvisingInsights
+    post:
+      description: create a new advisor insight
+      operationId: createAdvisingInsights
+
+  /advising/insights/{insightId}/execute:
+    get:
+      description: run embedded sql query for an insight on a specific student
+      operationId: runAdvisingInsight
+
+  /advising/sessions:
+    get:
+      description: return booked advising sessions for the current advisor in the next and upcoming week
+      operationId: getAdvisingSessions
+
+  /degreeworks/setup:
+    post:
+      description: seed degreeworks with initial degree data for insights
+      operationId: seedDegreeWorks
 
 components:
   schemas:

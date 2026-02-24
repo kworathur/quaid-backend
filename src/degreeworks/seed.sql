@@ -71,9 +71,9 @@ ON CONFLICT DO NOTHING;
 -- Students 1-5: CS-BS  |  Students 6-8: BUS-BA  |  Student 9-10: MATH-BS
 INSERT INTO student_programs (student_id, program_id, declared_date, is_active, expected_graduation)
 SELECT s.sid, p.program_id, '2022-08-15', TRUE,
-       CASE WHEN s.sid <= 5 THEN '2026-05-10'
-            WHEN s.sid <= 8 THEN '2025-12-15'
-            ELSE '2026-05-10' END
+       CASE WHEN s.sid <= 5 THEN DATE '2026-05-10'
+            WHEN s.sid <= 8 THEN DATE '2025-12-15'
+            ELSE DATE '2026-05-10' END
 FROM (VALUES (1),(2),(3),(4),(5)) AS s(sid),
      (SELECT program_id FROM programs WHERE program_code = 'CS-BS') AS p
 ON CONFLICT DO NOTHING;

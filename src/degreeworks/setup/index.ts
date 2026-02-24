@@ -177,7 +177,7 @@ WHERE p.program_code = 'BUS-BA'
   AND (c.subject_code = 'BUS' OR (c.subject_code = 'ENGL' AND c.course_number IN ('1101','1102')));
 INSERT INTO student_programs (student_id, program_id, declared_date, is_active, expected_graduation)
 SELECT s.sid, p.program_id, '2022-08-15', TRUE,
-  CASE WHEN s.sid <= 5 THEN '2026-05-10' WHEN s.sid <= 8 THEN '2025-12-15' ELSE '2026-05-10' END
+  CASE WHEN s.sid <= 5 THEN DATE '2026-05-10' WHEN s.sid <= 8 THEN DATE '2025-12-15' ELSE DATE '2026-05-10' END
 FROM (VALUES (1),(2),(3),(4),(5)) AS s(sid),
      (SELECT program_id FROM programs WHERE program_code = 'CS-BS') AS p;
 INSERT INTO student_programs (student_id, program_id, declared_date, is_active, expected_graduation)
