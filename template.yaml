@@ -49,6 +49,7 @@ Resources:
 
   CognitoAuthorizerUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoAuthorizerUserPoolResourceServer
     Properties:
       AllowedOAuthFlows:
         - code
@@ -57,6 +58,9 @@ Resources:
         - email
         - openid
         - profile
+        - com.apigw/advising.student
+        - com.apigw/advising.advisor
+        - com.apigw/advising.admin
       CallbackURLs:
         - !Ref CallbackUrl
       ClientName: !Sub ${AWS::StackName}-client

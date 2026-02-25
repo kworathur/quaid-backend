@@ -5,15 +5,10 @@
  * Returns all BOOKED sessions for the authenticated advisor in the current
  * and upcoming week.
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  QueryCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { errorResponse } from '../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -25,19 +20,24 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   console.info('received:', event);
 
-  const advisorId =
-    event.requestContext?.authorizer?.claims?.sub as string | undefined;
+  const advisorId = event.requestContext?.authorizer?.claims?.sub as
+    | string
+    | undefined;
   if (!advisorId) {
-    return { statusCode: 401, body: JSON.stringify({ message: 'Unauthorized' }) };
+    return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized');
   }
 
   // Current week Monday 00:00 UTC through two weeks ahead
   const now = new Date();
   const dayOfWeek = now.getUTCDay(); // 0 = Sun
   const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const weekStart = new Date(now.getTime() - daysToMonday * 24 * 60 * 60 * 1000);
+  const weekStart = new Date(
+    now.getTime() - daysToMonday * 24 * 60 * 60 * 1000,
+  );
   weekStart.setUTCHours(0, 0, 0, 0);
-  const twoWeeksEnd = new Date(weekStart.getTime() + 14 * 24 * 60 * 60 * 1000 - 1);
+  const twoWeeksEnd = new Date(
+    weekStart.getTime() + 14 * 24 * 60 * 60 * 1000 - 1,
+  );
 
   try {
     const result = await ddb.send(
@@ -63,6 +63,6 @@ export const handler = async (
     };
   } catch (err) {
     console.error('Error querying sessions:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 };

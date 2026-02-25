@@ -3,10 +3,7 @@
  * GET  /advising/insights  — list advisor's insights
  * Scope: com.apigw/advising.advisor
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -17,6 +14,10 @@ import { v4 as uuidv4 } from 'uuid';
 import * as z from 'zod';
 import { TemplateKey } from '../../lib/types/advising';
 import { INSIGHT_TEMPLATES } from '../../lib/advisingInsightTemplates';
+import {
+  errorResponse,
+  validationErrorResponse,
+} from '../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -34,10 +35,11 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   console.info('received:', event);
 
-  const advisorId =
-    event.requestContext?.authorizer?.claims?.sub as string | undefined;
+  const advisorId = event.requestContext?.authorizer?.claims?.sub as
+    | string
+    | undefined;
   if (!advisorId) {
-    return { statusCode: 401, body: JSON.stringify({ message: 'Unauthorized' }) };
+    return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized');
   }
 
   switch (event.httpMethod) {
@@ -46,7 +48,7 @@ export const handler = async (
     case 'POST':
       return createInsight(advisorId, event.body);
     default:
-      return { statusCode: 405, body: JSON.stringify({ message: 'Method not allowed' }) };
+      return errorResponse(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
   }
 };
 
@@ -55,7 +57,7 @@ async function createInsight(
   rawBody: string | null,
 ): Promise<APIGatewayProxyResult> {
   if (!rawBody) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Request body required' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Request body required');
   }
 
   let body: z.infer<typeof CreateInsightRequest>;
@@ -63,22 +65,21 @@ async function createInsight(
     body = CreateInsightRequest.parse(JSON.parse(rawBody));
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return { statusCode: 400, body: JSON.stringify({ error: z.treeifyError(err) }) };
+      return validationErrorResponse(err);
     }
-    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON');
   }
 
   // Validate parameters against the template's schema
   const template = INSIGHT_TEMPLATES[body.templateKey];
   const paramValidation = template.paramSchema.safeParse(body.parameters);
   if (!paramValidation.success) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({
-        message: 'Invalid parameters for template',
-        error: z.treeifyError(paramValidation.error),
-      }),
-    };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'Invalid parameters for template',
+      z.treeifyError(paramValidation.error),
+    );
   }
 
   const now = new Date().toISOString();
@@ -97,7 +98,7 @@ async function createInsight(
     await ddb.send(new PutCommand({ TableName: INSIGHTS_TABLE, Item: item }));
   } catch (err) {
     console.error('Error creating insight:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   return {
@@ -123,6 +124,6 @@ async function listInsights(advisorId: string): Promise<APIGatewayProxyResult> {
     };
   } catch (err) {
     console.error('Error listing insights:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 }

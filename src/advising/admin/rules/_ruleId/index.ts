@@ -3,10 +3,7 @@
  * DELETE /advising/admin/rules/{ruleId}  — delete a rule
  * Scope: com.apigw/advising.admin
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -16,6 +13,10 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import * as z from 'zod';
 import { ConditionType } from '../../../../lib/types/advising';
+import {
+  errorResponse,
+  validationErrorResponse,
+} from '../../../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -36,7 +37,7 @@ export const handler = async (
 
   const ruleId = event.pathParameters?.ruleId;
   if (!ruleId) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing ruleId path parameter' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Missing ruleId path parameter');
   }
 
   switch (event.httpMethod) {
@@ -45,7 +46,7 @@ export const handler = async (
     case 'DELETE':
       return deleteRule(ruleId);
     default:
-      return { statusCode: 405, body: JSON.stringify({ message: 'Method not allowed' }) };
+      return errorResponse(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
   }
 };
 
@@ -54,7 +55,7 @@ async function updateRule(
   rawBody: string | null,
 ): Promise<APIGatewayProxyResult> {
   if (!rawBody) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Request body required' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Request body required');
   }
 
   let body: z.infer<typeof UpdateRuleRequest>;
@@ -62,9 +63,9 @@ async function updateRule(
     body = UpdateRuleRequest.parse(JSON.parse(rawBody));
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return { statusCode: 400, body: JSON.stringify({ error: z.treeifyError(err) }) };
+      return validationErrorResponse(err);
     }
-    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON');
   }
 
   // Verify rule exists
@@ -73,11 +74,11 @@ async function updateRule(
       new GetCommand({ TableName: RULES_TABLE, Key: { ruleId } }),
     );
     if (!result.Item) {
-      return { statusCode: 404, body: JSON.stringify({ message: 'Rule not found' }) };
+      return errorResponse(404, 'RESOURCE_NOT_FOUND', 'Rule not found');
     }
   } catch (err) {
     console.error('Error fetching rule:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   const updateParts: string[] = [];
@@ -103,7 +104,7 @@ async function updateRule(
   }
 
   if (updateParts.length === 0) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'No fields to update' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'No fields to update');
   }
 
   try {
@@ -118,10 +119,13 @@ async function updateRule(
     );
   } catch (err) {
     console.error('Error updating rule:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
-  return { statusCode: 200, body: JSON.stringify({ message: 'Rule updated', ruleId }) };
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Rule updated', ruleId }),
+  };
 }
 
 async function deleteRule(ruleId: string): Promise<APIGatewayProxyResult> {
@@ -131,14 +135,19 @@ async function deleteRule(ruleId: string): Promise<APIGatewayProxyResult> {
       new GetCommand({ TableName: RULES_TABLE, Key: { ruleId } }),
     );
     if (!result.Item) {
-      return { statusCode: 404, body: JSON.stringify({ message: 'Rule not found' }) };
+      return errorResponse(404, 'RESOURCE_NOT_FOUND', 'Rule not found');
     }
 
-    await ddb.send(new DeleteCommand({ TableName: RULES_TABLE, Key: { ruleId } }));
+    await ddb.send(
+      new DeleteCommand({ TableName: RULES_TABLE, Key: { ruleId } }),
+    );
   } catch (err) {
     console.error('Error deleting rule:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
-  return { statusCode: 200, body: JSON.stringify({ message: 'Rule deleted', ruleId }) };
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Rule deleted', ruleId }),
+  };
 }

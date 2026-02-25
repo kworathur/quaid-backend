@@ -4,15 +4,10 @@
  *
  * Returns AVAILABLE slots for the given advisor in the next 2 weeks.
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  QueryCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { errorResponse } from '../../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -26,10 +21,11 @@ export const handler = async (
 
   const advisorId = event.pathParameters?.advisorId;
   if (!advisorId) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'Missing advisorId path parameter' }),
-    };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'Missing advisorId path parameter',
+    );
   }
 
   const now = new Date();
@@ -59,6 +55,6 @@ export const handler = async (
     };
   } catch (err) {
     console.error('Error querying slots:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 };

@@ -3,10 +3,7 @@
  * PUT /advising/admin/config  — update global advising config (pause/unpause)
  * Scope: com.apigw/advising.admin
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -14,14 +11,23 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import * as z from 'zod';
+import {
+  errorResponse,
+  validationErrorResponse,
+} from '../../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
 
 const CONFIG_TABLE = process.env.ADVISING_CONFIG_TABLE!;
-const CONFIG_KEY = 'ADVISING_PAUSED';
+
+// Allowed config keys that admins may read/update via this endpoint.
+// ADVISING_PAUSED: when true, all student booking attempts return 503.
+const ALLOWED_CONFIG_KEYS = ['ADVISING_PAUSED'] as const;
+const ConfigKey = z.enum(ALLOWED_CONFIG_KEYS);
 
 const UpdateConfigRequest = z.object({
+  configKey: ConfigKey,
   value: z.boolean(),
   reason: z.string().optional(),
 });
@@ -31,23 +37,33 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   console.info('received:', event);
 
-  const adminSub =
-    event.requestContext?.authorizer?.claims?.sub as string | undefined;
+  const adminSub = event.requestContext?.authorizer?.claims?.sub as
+    | string
+    | undefined;
 
   switch (event.httpMethod) {
     case 'GET':
-      return getConfig();
+      return getConfig(event.queryStringParameters?.configKey);
     case 'PUT':
       return updateConfig(event.body, adminSub);
     default:
-      return { statusCode: 405, body: JSON.stringify({ message: 'Method not allowed' }) };
+      return errorResponse(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
   }
 };
 
-async function getConfig(): Promise<APIGatewayProxyResult> {
+async function getConfig(
+  rawConfigKey: string | undefined,
+): Promise<APIGatewayProxyResult> {
+  // Default to ADVISING_PAUSED when no query param is provided
+  const configKey = rawConfigKey ?? 'ADVISING_PAUSED';
+  const parsed = ConfigKey.safeParse(configKey);
+  if (!parsed.success) {
+    return errorResponse(400, 'BAD_REQUEST', `Unknown configKey: ${configKey}`);
+  }
+
   try {
     const result = await ddb.send(
-      new GetCommand({ TableName: CONFIG_TABLE, Key: { configKey: CONFIG_KEY } }),
+      new GetCommand({ TableName: CONFIG_TABLE, Key: { configKey } }),
     );
 
     // Return a sensible default if the item doesn't exist yet
@@ -55,7 +71,7 @@ async function getConfig(): Promise<APIGatewayProxyResult> {
       return {
         statusCode: 200,
         body: JSON.stringify({
-          configKey: CONFIG_KEY,
+          configKey,
           value: false,
           reason: '',
         }),
@@ -65,7 +81,7 @@ async function getConfig(): Promise<APIGatewayProxyResult> {
     return { statusCode: 200, body: JSON.stringify(result.Item) };
   } catch (err) {
     console.error('Error fetching config:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 }
 
@@ -74,7 +90,7 @@ async function updateConfig(
   updatedBy: string | undefined,
 ): Promise<APIGatewayProxyResult> {
   if (!rawBody) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Request body required' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Request body required');
   }
 
   let body: z.infer<typeof UpdateConfigRequest>;
@@ -82,18 +98,19 @@ async function updateConfig(
     body = UpdateConfigRequest.parse(JSON.parse(rawBody));
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return { statusCode: 400, body: JSON.stringify({ error: z.treeifyError(err) }) };
+      return validationErrorResponse(err);
     }
-    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON');
   }
 
   const now = new Date().toISOString();
+  const configKey = body.configKey;
 
   try {
     await ddb.send(
       new UpdateCommand({
         TableName: CONFIG_TABLE,
-        Key: { configKey: CONFIG_KEY },
+        Key: { configKey },
         UpdateExpression:
           'SET #val = :val, reason = :reason, updatedAt = :ua, updatedBy = :ub',
         ExpressionAttributeNames: { '#val': 'value' },
@@ -107,14 +124,19 @@ async function updateConfig(
     );
   } catch (err) {
     console.error('Error updating config:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
+
+  const label =
+    configKey === 'ADVISING_PAUSED'
+      ? `Advising ${body.value ? 'paused' : 'unpaused'}`
+      : `${configKey} updated`;
 
   return {
     statusCode: 200,
     body: JSON.stringify({
-      message: `Advising ${body.value ? 'paused' : 'unpaused'}`,
-      configKey: CONFIG_KEY,
+      message: label,
+      configKey,
       value: body.value,
     }),
   };

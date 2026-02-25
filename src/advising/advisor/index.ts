@@ -5,16 +5,14 @@
  * Returns the assigned advisor for the authenticated student by evaluating
  * assignment rules stored in AdvisingRulesTable against the student record.
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   GetCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { errorResponse } from '../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -32,12 +30,11 @@ export const handler = async (
     event.requestContext?.authorizer?.claims?.['custom:studentId'];
 
   if (!studentIdClaim) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({
-        message: 'Missing custom:studentId claim in token',
-      }),
-    };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'Missing custom:studentId claim in token',
+    );
   }
 
   const studentId = parseInt(studentIdClaim, 10);
@@ -49,20 +46,19 @@ export const handler = async (
       new GetCommand({ TableName: STUDENTS_TABLE, Key: { id: studentId } }),
     );
     if (!result.Item) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ message: 'Student not found' }),
-      };
+      return errorResponse(404, 'RESOURCE_NOT_FOUND', 'Student not found');
     }
     studentName = result.Item.name as string;
   } catch (err) {
     console.error('Error fetching student:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   // Derive last name (assume "First Last" format; fall back to full name)
   const nameParts = studentName.trim().split(/\s+/);
-  const lastName = (nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0]).toUpperCase();
+  const lastName = (
+    nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0]
+  ).toUpperCase();
 
   // Load all active rules, sorted by priority ascending
   let rules: Record<string, unknown>[];
@@ -79,7 +75,7 @@ export const handler = async (
     );
   } catch (err) {
     console.error('Error fetching rules:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   // Evaluate rules in priority order
@@ -97,10 +93,11 @@ export const handler = async (
   }
 
   if (!assignedAdvisorId) {
-    return {
-      statusCode: 404,
-      body: JSON.stringify({ message: 'No advisor assigned for this student' }),
-    };
+    return errorResponse(
+      404,
+      'RESOURCE_NOT_FOUND',
+      'No advisor assigned for this student',
+    );
   }
 
   return {

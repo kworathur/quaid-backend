@@ -27,6 +27,8 @@ tags:
     description: Background checks on students and their financial aid applications.
   - name: advising
     description: Advising appointments booking
+  - name: advising_insights
+    description: Insights to give students topics to discuss during advising
 paths:
   /students:
     get:
@@ -654,9 +656,18 @@ paths:
         - advising
       summary: retrieve the value of a flag in the application's global config for advising.
       operationId: getConfig
+      parameters:
+        - name: configKey
+          in: query
+          required: false
+          description: The config key to read. Defaults to ADVISING_PAUSED.
+          schema:
+            type: string
+            enum:
+              - ADVISING_PAUSED
       responses:
         '200':
-          description: Task status returned successfully
+          description: Config value returned successfully
           content:
             application/json:
               schema:
@@ -667,6 +678,12 @@ paths:
                     configKey: 'ADVISING_PAUSED'
                     value: false
                     reason: 'registration for phase I now open'
+        '400':
+          description: unknown config key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     put:
       tags:
         - advising
@@ -675,33 +692,31 @@ paths:
       requestBody:
         content:
           application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConfigRequest'
             example:
-              value: ADVISING_PAUSED
-              reason: Registration now open
+              configKey: ADVISING_PAUSED
+              value: true
+              reason: Maintenance Window
       responses:
         '200':
           description: Advising configuration updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BaseApiResponse'
+                $ref: '#/components/schemas/UpdateConfigResponse'
               examples:
                 AdvisingPaused:
                   value:
-                    status: UPDATED
-                    statusCode: 200
-                    message:
-                      message: 'Advising paused'
-                      configKey: 'ADVISING_PAUSED'
-                      value: true
+                    message: 'Advising paused'
+                    configKey: 'ADVISING_PAUSED'
+                    value: true
         '400':
-          description: bad request - advising key not defined for this environment
+          description: bad request - invalid request body
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                message: this key does cannot be updated or does not exist
         default:
           description: unexpected application error
           content:
@@ -715,24 +730,35 @@ paths:
         - advising
       summary: list all rules for assigning advisors to students
       operationId: getRules
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of rules to return (default 25, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: lastKey
+          in: query
+          required: false
+          description: Cursor (ruleId) from the previous page for pagination
+          schema:
+            type: string
       responses:
         '200':
-          description: Returned all advising-student mapping rules successfully.
+          description: Returned advising-student mapping rules successfully.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AdvisingRule'
-                  pagination:
-                    $ref: '#/components/schemas/PaginationParams'
-                  links:
-                    $ref: '#/components/schemas/PaginationLinks'
-        '400':
-          description: failed to list all advisor-advisee mappings
+                $ref: '#/components/schemas/ListRulesResponse'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
       tags:
@@ -745,25 +771,21 @@ paths:
             schema:
               $ref: '#/components/schemas/AdvisingRule'
       responses:
-        '200':
+        '201':
           description: advisor-advisee mapping rule was created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BaseApiResponse'
+                $ref: '#/components/schemas/CreateRuleResponse'
               example:
-                status: CREATED
-                statusCode: 200
-                message:
-                  message: the advising rule mapping students with last names in A-Z to advisor 4 was added successfully.
+                message: Rule created
+                ruleId: 'a0000000-0000-4000-a000-000000000001'
         '400':
           description: advisor-advisee mapping is malformed
           content:
             application/json:
-              examples:
-                InvalidAdvisor:
-                  value:
-                    message: an advisor with ID 4 does not exist
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/admin/rules/{ruleId}:
     put:
@@ -792,25 +814,27 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BaseApiResponse'
+                $ref: '#/components/schemas/RuleUpdatedResponse'
               example:
-                status: UPDATED
-                statusCode: 200
-                message: mapping updated successfully.
+                message: Rule updated
+                ruleId: 'a0000000-0000-4000-a000-000000000001'
         '400':
           description: malformed advisor-advisee mapping.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                InvalidConditionType:
-                  value:
-                    code: BAD_REQUEST
-                    data: invalid conditionType DATE_OF_BIRTH
+        '404':
+          description: rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/advisor:
     get:
+      tags:
+        - advising
       description: find the advisor for the current student using the advisor-advisee mappings
       operationId: getLoggedInUserAdvisor
       responses:
@@ -819,66 +843,451 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BaseApiResponse'
+                $ref: '#/components/schemas/GetAdvisorResponse'
               example:
-                statusCode: 200
-                message:
-                  advisorId: assignedAdvisorId
+                advisorId: advisor-uuid-1
+        '400':
+          description: missing claim in token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: no advisor assigned or student not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/availability/advisor/{advisorId}:
     get:
+      tags:
+        - advising
       description: get available slots for a given advisor in the next two weeks
       operationId: getAdvisorAvailability
+      parameters:
+        - name: advisorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: available slots for the advisor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAvailabilityResponse'
+        '400':
+          description: missing advisorId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/availability/week/{weekStartDate}:
-    get:
+    put:
+      tags:
+        - advising
       description: bulk create or replace advisor availability slots for a given week
       operationId: createAdvisorAvailability
+      parameters:
+        - name: weekStartDate
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: availability updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityUpdatedResponse'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/bookings/{bookingId}:
     delete:
+      tags:
+        - advising
       description: cancel an advisor booking
       operationId: deleteAdvisorBooking
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: booking cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingCancelledResponse'
+        '403':
+          description: forbidden - booking belongs to a different student
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: booking cannot be cancelled (wrong status or concurrent modification)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/bookings:
     get:
+      tags:
+        - advising
       description: list a student's booked advising sessions
       operationId: getBookings
+      responses:
+        '200':
+          description: list of booked sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListBookingsResponse'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
+      tags:
+        - advising
       description: book an advising slot
       operationId: bookAdvisingSlot
+      responses:
+        '201':
+          description: booking created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingCreatedResponse'
+        '400':
+          description: invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: slot unavailable or student already has a booking this week
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: advising bookings are currently paused
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/insights/{insightId}:
     get:
+      tags:
+        - advising_insights
       description: read an advising insight
       operationId: getAdvisingInsight
+      parameters:
+        - name: insightId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: insight details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvisingInsightRecord'
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: insight not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     put:
+      tags:
+        - advising_insights
       description: update an advising insight for a student
       operationId: putAdvisingInsight
+      parameters:
+        - name: insightId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: insight updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightUpdatedResponse'
+        '400':
+          description: invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: insight not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     delete:
+      tags:
+        - advising_insights
       description: delete an advising insight
       operationId: deleteAdvisingInsight
+      parameters:
+        - name: insightId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: insight deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightDeletedResponse'
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: insight not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/insights:
     get:
+      tags:
+        - advising_insights
       description: list an advisor's insights
       operationId: listAdvisingInsights
+      responses:
+        '200':
+          description: list of insights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListInsightsResponse'
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
+      tags:
+        - advising_insights
       description: create a new advisor insight
       operationId: createAdvisingInsights
+      responses:
+        '201':
+          description: insight created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightCreatedResponse'
+        '400':
+          description: invalid request body or parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/insights/{insightId}/execute:
     get:
+      tags:
+        - advising_insights
       description: run embedded sql query for an insight on a specific student
       operationId: runAdvisingInsight
+      parameters:
+        - name: insightId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: studentId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: insight query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightExecuteResponse'
+        '400':
+          description: missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: forbidden - insight belongs to a different advisor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: insight not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /advising/sessions:
     get:
+      tags:
+        - advising_insights
       description: return booked advising sessions for the current advisor in the next and upcoming week
       operationId: getAdvisingSessions
+      responses:
+        '200':
+          description: list of booked sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSessionsResponse'
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /degreeworks/setup:
     post:
+      tags:
+        - advising_insights
       description: seed degreeworks with initial degree data for insights
       operationId: seedDegreeWorks
 
@@ -1159,14 +1568,20 @@ components:
               type: string
               example: RESOURCE_NOT_FOUND
               enum:
-                - RESOURCE_NOT_FOUND
                 - BAD_REQUEST
-                - INTERNAL_SEVER_ERROR
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - RESOURCE_NOT_FOUND
+                - METHOD_NOT_ALLOWED
+                - CONFLICT
+                - INTERNAL_SERVER_ERROR
+                - SERVICE_UNAVAILABLE
             message:
               type: string
               example: The requested resource was not found.
             details:
-              type: string
+              type: [string, object]
+              description: Additional details about the error. May be a string or a Zod validation tree object.
               example: The student with the ID '12345' does not exist in your SIS.
             timestamp:
               type: string
@@ -1185,6 +1600,289 @@ components:
         - status
         - statusCode
         - error
+
+    # ── Advising request schemas ────────────────────────────────────────────
+
+    UpdateConfigRequest:
+      type: object
+      properties:
+        configKey:
+          type: string
+          description: The config key to update
+          enum:
+            - ADVISING_PAUSED
+        value:
+          type: boolean
+        reason:
+          type: string
+      required:
+        - configKey
+        - value
+
+    # ── Advising response schemas ───────────────────────────────────────────
+
+    UpdateConfigResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Advising paused
+        configKey:
+          type: string
+          example: ADVISING_PAUSED
+        value:
+          type: boolean
+      required:
+        - message
+        - configKey
+        - value
+
+    ListRulesResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdvisingRule'
+        lastKey:
+          type: string
+          description: Cursor for the next page. Absent when there are no more results.
+      required:
+        - data
+
+    CreateRuleResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Rule created
+        ruleId:
+          type: string
+          format: uuid
+      required:
+        - message
+        - ruleId
+
+    RuleUpdatedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Rule updated
+        ruleId:
+          type: string
+      required:
+        - message
+        - ruleId
+
+    GetAdvisorResponse:
+      type: object
+      properties:
+        advisorId:
+          type: string
+      required:
+        - advisorId
+
+    BookingCreatedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Booking created
+        slotId:
+          type: string
+          format: uuid
+      required:
+        - message
+        - slotId
+
+    BookingCancelledResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Booking cancelled
+        slotId:
+          type: string
+          format: uuid
+      required:
+        - message
+        - slotId
+
+    ListBookingsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdvisingSlot'
+      required:
+        - data
+
+    ListSessionsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdvisingSlot'
+      required:
+        - data
+
+    ListAvailabilityResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdvisingSlot'
+      required:
+        - data
+
+    AvailabilityUpdatedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Availability updated
+        slotIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+        - message
+        - slotIds
+
+    InsightCreatedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Insight created
+        insightId:
+          type: string
+          format: uuid
+      required:
+        - message
+        - insightId
+
+    ListInsightsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdvisingInsightRecord'
+      required:
+        - data
+
+    InsightUpdatedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Insight updated
+        insightId:
+          type: string
+      required:
+        - message
+        - insightId
+
+    InsightDeletedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Insight deleted
+        insightId:
+          type: string
+      required:
+        - message
+        - insightId
+
+    InsightExecuteResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+        insightId:
+          type: string
+        studentId:
+          type: integer
+      required:
+        - data
+        - insightId
+        - studentId
+
+    AdvisingSlot:
+      type: object
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        advisorId:
+          type: string
+        slotDateTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - AVAILABLE
+            - BOOKED
+            - CANCELLED
+        advisorCreatedAt:
+          type: string
+          format: date-time
+        studentId:
+          type: integer
+        bookingDescription:
+          type: string
+        bookingCreatedAt:
+          type: string
+          format: date-time
+        advisorDisplayName:
+          type: string
+      required:
+        - slotId
+        - advisorId
+        - slotDateTime
+        - status
+
+    AdvisingInsightRecord:
+      type: object
+      properties:
+        insightId:
+          type: string
+          format: uuid
+        advisorId:
+          type: string
+        name:
+          type: string
+        templateKey:
+          type: string
+          enum:
+            - CREDENTIALS_NEAR_COMPLETION
+            - SCHOLARSHIP_ELIGIBILITY
+            - SUGGESTED_COURSES
+        parameters:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - insightId
+        - advisorId
+        - name
+        - templateKey
+        - parameters
+
   securitySchemes:
     oauth2Profiles:
       type: oauth2

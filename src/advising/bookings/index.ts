@@ -3,10 +3,7 @@
  * GET  /advising/bookings  — list student's booked sessions
  * Scope: com.apigw/advising.student
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -14,6 +11,10 @@ import {
   QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import * as z from 'zod';
+import {
+  errorResponse,
+  validationErrorResponse,
+} from '../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -34,7 +35,7 @@ export const handler = async (
   const studentIdClaim =
     event.requestContext?.authorizer?.claims?.['custom:studentId'];
   if (!studentIdClaim) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing custom:studentId claim' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Missing custom:studentId claim');
   }
   const studentId = parseInt(studentIdClaim, 10);
 
@@ -44,7 +45,7 @@ export const handler = async (
     case 'POST':
       return createBooking(studentId, event.body);
     default:
-      return { statusCode: 405, body: JSON.stringify({ message: 'Method not allowed' }) };
+      return errorResponse(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
   }
 };
 
@@ -64,7 +65,7 @@ async function createBooking(
   rawBody: string | null,
 ): Promise<APIGatewayProxyResult> {
   if (!rawBody) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Request body required' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Request body required');
   }
 
   let body: z.infer<typeof BookingRequest>;
@@ -72,18 +73,19 @@ async function createBooking(
     body = BookingRequest.parse(JSON.parse(rawBody));
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return { statusCode: 400, body: JSON.stringify({ error: z.treeifyError(err) }) };
+      return validationErrorResponse(err);
     }
-    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON');
   }
 
   // Check global pause state
   try {
     if (await isAdvisingPaused()) {
-      return {
-        statusCode: 503,
-        body: JSON.stringify({ message: 'Advising bookings are currently paused' }),
-      };
+      return errorResponse(
+        503,
+        'SERVICE_UNAVAILABLE',
+        'Advising bookings are currently paused',
+      );
     }
   } catch (err) {
     console.error('Error checking advising pause state:', err);
@@ -95,7 +97,9 @@ async function createBooking(
   const now = new Date();
   const dayOfWeek = now.getUTCDay(); // 0 = Sun
   const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const weekStart = new Date(now.getTime() - daysToMonday * 24 * 60 * 60 * 1000);
+  const weekStart = new Date(
+    now.getTime() - daysToMonday * 24 * 60 * 60 * 1000,
+  );
   weekStart.setUTCHours(0, 0, 0, 0);
   const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
 
@@ -118,16 +122,15 @@ async function createBooking(
     );
 
     if (existing.Items && existing.Items.length > 0) {
-      return {
-        statusCode: 409,
-        body: JSON.stringify({
-          message: 'You already have a booked session this week',
-        }),
-      };
+      return errorResponse(
+        409,
+        'CONFLICT',
+        'You already have a booked session this week',
+      );
     }
   } catch (err) {
     console.error('Error checking existing bookings:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   // Atomically transition slot from AVAILABLE → BOOKED
@@ -139,9 +142,7 @@ async function createBooking(
         Key: { slotId: body.slotId },
         UpdateExpression:
           'SET #st = :booked, studentId = :sid, bookingCreatedAt = :ts' +
-          (body.bookingDescription
-            ? ', bookingDescription = :desc'
-            : ''),
+          (body.bookingDescription ? ', bookingDescription = :desc' : ''),
         ConditionExpression: '#st = :available',
         ExpressionAttributeNames: { '#st': 'status' },
         ExpressionAttributeValues: {
@@ -158,15 +159,14 @@ async function createBooking(
   } catch (err: unknown) {
     const errName = (err as { name?: string }).name;
     if (errName === 'ConditionalCheckFailedException') {
-      return {
-        statusCode: 409,
-        body: JSON.stringify({
-          message: 'Slot is no longer available (already booked or cancelled)',
-        }),
-      };
+      return errorResponse(
+        409,
+        'CONFLICT',
+        'Slot is no longer available (already booked or cancelled)',
+      );
     }
     console.error('Error booking slot:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   return {
@@ -197,6 +197,6 @@ async function listBookings(studentId: number): Promise<APIGatewayProxyResult> {
     };
   } catch (err) {
     console.error('Error listing bookings:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 }

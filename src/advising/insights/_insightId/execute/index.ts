@@ -6,15 +6,9 @@
  * executes the query against the Aurora Serverless v2 DegreeWorks DB via the
  * RDS Data API.
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
   RDSDataClient,
   ExecuteStatementCommand,
@@ -22,6 +16,7 @@ import {
 } from '@aws-sdk/client-rds-data';
 import { INSIGHT_TEMPLATES } from '../../../../lib/advisingInsightTemplates';
 import type { TemplateKeyType } from '../../../../lib/types/advising';
+import { errorResponse } from '../../../../lib/serverResponseBuilder';
 
 const ddbClient = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(ddbClient);
@@ -47,24 +42,37 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   console.info('received:', event);
 
-  const advisorId =
-    event.requestContext?.authorizer?.claims?.sub as string | undefined;
+  const advisorId = event.requestContext?.authorizer?.claims?.sub as
+    | string
+    | undefined;
   if (!advisorId) {
-    return { statusCode: 401, body: JSON.stringify({ message: 'Unauthorized' }) };
+    return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized');
   }
 
   const insightId = event.pathParameters?.insightId;
   if (!insightId) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing insightId path parameter' }) };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'Missing insightId path parameter',
+    );
   }
 
   const studentIdParam = event.queryStringParameters?.studentId;
   if (!studentIdParam) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing studentId query parameter' }) };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'Missing studentId query parameter',
+    );
   }
   const studentId = parseInt(studentIdParam, 10);
   if (isNaN(studentId)) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'studentId must be a valid integer' }) };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'studentId must be a valid integer',
+    );
   }
 
   // Load insight from DynamoDB
@@ -74,23 +82,27 @@ export const handler = async (
       new GetCommand({ TableName: INSIGHTS_TABLE, Key: { insightId } }),
     );
     if (!result.Item) {
-      return { statusCode: 404, body: JSON.stringify({ message: 'Insight not found' }) };
+      return errorResponse(404, 'RESOURCE_NOT_FOUND', 'Insight not found');
     }
     insight = result.Item as Record<string, unknown>;
   } catch (err) {
     console.error('Error fetching insight:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   // Verify the insight belongs to the calling advisor
   if (insight.advisorId !== advisorId) {
-    return { statusCode: 403, body: JSON.stringify({ message: 'Forbidden' }) };
+    return errorResponse(403, 'FORBIDDEN', 'Forbidden');
   }
 
   const templateKey = insight.templateKey as TemplateKeyType;
   const template = INSIGHT_TEMPLATES[templateKey];
   if (!template) {
-    return { statusCode: 400, body: JSON.stringify({ message: `Unknown templateKey: ${templateKey}` }) };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      `Unknown templateKey: ${templateKey}`,
+    );
   }
 
   const configParams = insight.parameters as Record<string, unknown>;
@@ -98,10 +110,11 @@ export const handler = async (
   // Validate stored parameters against template schema
   const validation = template.paramSchema.safeParse(configParams);
   if (!validation.success) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'Stored parameters are invalid for this template' }),
-    };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'Stored parameters are invalid for this template',
+    );
   }
 
   // Build RDS named parameter bindings
@@ -110,9 +123,10 @@ export const handler = async (
     { name: 'student_id', value: { longValue: studentId } },
     ...Object.entries(configParams).map(([name, value]) => ({
       name,
-      value: typeof value === 'number'
-        ? { doubleValue: value }
-        : { stringValue: String(value) },
+      value:
+        typeof value === 'number'
+          ? { doubleValue: value }
+          : { stringValue: String(value) },
     })),
   ];
 
@@ -139,7 +153,7 @@ export const handler = async (
     );
   } catch (err) {
     console.error('Error executing insight query:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   return {

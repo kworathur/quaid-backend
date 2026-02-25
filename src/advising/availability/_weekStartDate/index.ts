@@ -6,10 +6,7 @@
  * weekStartDate must be an ISO-8601 date (YYYY-MM-DD) representing Monday.
  * Body: { slots: [{ slotDateTime: string, advisorDisplayName?: string }] }
  */
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -19,6 +16,10 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import * as z from 'zod';
+import {
+  errorResponse,
+  validationErrorResponse,
+} from '../../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
@@ -26,12 +27,14 @@ const ddb = DynamoDBDocumentClient.from(client);
 const SLOTS_TABLE = process.env.ADVISING_SLOTS_TABLE!;
 
 const RequestBody = z.object({
-  slots: z.array(
-    z.object({
-      slotDateTime: z.string(), // ISO-8601 UTC
-      advisorDisplayName: z.string().optional(),
-    }),
-  ).min(1),
+  slots: z
+    .array(
+      z.object({
+        slotDateTime: z.string(), // ISO-8601 UTC
+        advisorDisplayName: z.string().optional(),
+      }),
+    )
+    .min(1),
 });
 
 export const handler = async (
@@ -40,25 +43,27 @@ export const handler = async (
   console.info('received:', event);
 
   if (event.httpMethod !== 'PUT') {
-    return { statusCode: 405, body: JSON.stringify({ message: 'Method not allowed' }) };
+    return errorResponse(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
   }
 
-  const advisorId =
-    event.requestContext?.authorizer?.claims?.sub as string | undefined;
+  const advisorId = event.requestContext?.authorizer?.claims?.sub as
+    | string
+    | undefined;
   if (!advisorId) {
-    return { statusCode: 401, body: JSON.stringify({ message: 'Unauthorized' }) };
+    return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized');
   }
 
   const weekStartDate = event.pathParameters?.weekStartDate;
   if (!weekStartDate) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'Missing weekStartDate path parameter' }),
-    };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'Missing weekStartDate path parameter',
+    );
   }
 
   if (!event.body) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Request body required' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Request body required');
   }
 
   let body: z.infer<typeof RequestBody>;
@@ -66,12 +71,9 @@ export const handler = async (
     body = RequestBody.parse(JSON.parse(event.body));
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: z.treeifyError(err) }),
-      };
+      return validationErrorResponse(err);
     }
-    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) };
+    return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON');
   }
 
   // Derive week boundaries (Mon 00:00 UTC → Sun 23:59:59 UTC)
@@ -79,10 +81,11 @@ export const handler = async (
   const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
 
   if (isNaN(weekStart.getTime())) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'weekStartDate must be a valid ISO-8601 date (YYYY-MM-DD)' }),
-    };
+    return errorResponse(
+      400,
+      'BAD_REQUEST',
+      'weekStartDate must be a valid ISO-8601 date (YYYY-MM-DD)',
+    );
   }
 
   // Cancel any existing AVAILABLE slots the advisor has for this week so the
@@ -118,7 +121,7 @@ export const handler = async (
     }
   } catch (err) {
     console.error('Error cancelling existing slots:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   // Create the new slots
@@ -146,7 +149,7 @@ export const handler = async (
     }
   } catch (err) {
     console.error('Error creating slots:', err);
-    return { statusCode: 500, body: JSON.stringify({ message: 'Internal server error' }) };
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   return {
