@@ -5,7 +5,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
   CognitoIdentityProviderClient,
-  ListUsersInGroupCommand,
+  type ListUsersInGroupCommandOutput,
+  paginateListUsersInGroup,
   type UserType,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { errorResponse } from '../../../lib/serverResponseBuilder';
@@ -83,20 +84,17 @@ async function fetchAdvisors(
   offset: number,
   limit: number,
 ): Promise<{ users: UserType[]; hasNext: boolean }> {
-  let nextToken: string | undefined = undefined;
   let seen = 0;
   const collected: UserType[] = [];
+  const paginator = paginateListUsersInGroup(
+    { client, pageSize: MAX_PAGE_SIZE },
+    {
+      UserPoolId: USER_POOL_ID,
+      GroupName: ADVISOR_GROUP,
+    },
+  );
 
-  while (collected.length < limit + 1) {
-    const response = await client.send(
-      new ListUsersInGroupCommand({
-        UserPoolId: USER_POOL_ID,
-        GroupName: ADVISOR_GROUP,
-        Limit: MAX_PAGE_SIZE,
-        ...(nextToken ? { NextToken: nextToken } : {}),
-      }),
-    );
-
+  for await (const response of paginator as AsyncIterable<ListUsersInGroupCommandOutput>) {
     const users = response.Users ?? [];
     for (const user of users) {
       if (seen < offset) {
@@ -109,9 +107,10 @@ async function fetchAdvisors(
         break;
       }
     }
-
-    nextToken = response.NextToken;
-    if (!nextToken || users.length === 0) {
+    if (collected.length >= limit + 1) {
+      break;
+    }
+    if (users.length === 0) {
       break;
     }
   }
