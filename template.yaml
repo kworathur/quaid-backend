@@ -51,6 +51,9 @@ Resources:
     Type: AWS::Cognito::UserPoolClient
     DependsOn: CognitoAuthorizerUserPoolResourceServer
     Properties:
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
       AllowedOAuthFlows:
         - code
       AllowedOAuthFlowsUserPoolClient: true
