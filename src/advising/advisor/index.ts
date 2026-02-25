@@ -129,7 +129,7 @@ async function lookupAdvisorName(advisorId: string): Promise<string> {
   const result = await cognito.send(
     new ListUsersCommand({
       UserPoolId: USER_POOL_ID,
-      Filter: `sub = \"${advisorId}\"`,
+      Filter: `sub = "${advisorId}"`,
       Limit: 1,
     }),
   );
