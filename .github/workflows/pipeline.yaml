@@ -56,7 +56,7 @@ jobs:
         run: npm test
 
   delete-feature:
-    if: startsWith(github.event.ref, 'feature') && github.event_name == 'delete'
+    if: startsWith(github.event.ref, 'feat') && github.event_name == 'delete'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -89,7 +89,7 @@ jobs:
     # which will build the stack and deploy to a stack named with branch name.
     # https://github.com/actions/setup-python
     # https://github.com/aws-actions/configure-aws-credentials#notice-node12-deprecation-warning
-    if: startsWith(github.ref, 'refs/heads/feature')
+    if: startsWith(github.ref, 'refs/heads/feat')
     needs: [test]
     runs-on: ubuntu-latest
     steps:
@@ -121,10 +121,12 @@ jobs:
         shell: bash
         run: |
           sam deploy --stack-name $(echo ${GITHUB_REF##*/} | tr -cd '[a-zA-Z0-9-]') \
+            --parameter-overrides Email=kworathur3@gatech.edu EnvironmentType=dev CallbackUrl=https://oauth.pstmn.io/v1/callback MelissaApiKeyParameterName=quaid/melissa-api-key \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
+            --no-confirm-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
 
   build-and-package:
