@@ -17,6 +17,7 @@ interface CognitoPreTokenEvent {
       groupsToOverride?: string[];
     };
     clientMetadata?: Record<string, string>;
+    userAttributes?: Record<string, string>;
   };
   response: {
     claimsOverrideDetails?: {
@@ -45,6 +46,10 @@ export const handler = async (
   const groups: string[] =
     event.request.groupConfiguration?.groupsToOverride ?? [];
 
+  const studentId =
+    event.request.userAttributes?.['custom:studentId'] ??
+    event.request.clientMetadata?.studentId;
+
   // Collect advising scopes for any groups the user belongs to
   const advisingScopes: string[] = [];
   for (const group of groups) {
@@ -54,12 +59,20 @@ export const handler = async (
     }
   }
 
+  const claimsToAddOrOverride: Record<string, string> = {};
+
   if (advisingScopes.length > 0) {
     // Cognito expects the scope claim as a space-separated string
+    claimsToAddOrOverride.scope = advisingScopes.join(' ');
+  }
+
+  if (studentId) {
+    claimsToAddOrOverride['custom:studentId'] = studentId;
+  }
+
+  if (Object.keys(claimsToAddOrOverride).length > 0) {
     event.response.claimsOverrideDetails = {
-      claimsToAddOrOverride: {
-        scope: advisingScopes.join(' '),
-      },
+      claimsToAddOrOverride,
     };
   }
 

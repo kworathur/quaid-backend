@@ -66,6 +66,9 @@ Resources:
         - com.apigw/advising.admin
       CallbackURLs:
         - !Ref CallbackUrl
+
+      LogoutURLs:
+        - http://localhost:3000/login
       ClientName: !Sub ${AWS::StackName}-client
       SupportedIdentityProviders:
         - COGNITO
