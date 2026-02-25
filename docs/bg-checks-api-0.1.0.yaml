@@ -787,6 +787,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /advising/admin/advisors:
+    get:
+      tags:
+        - advising
+      summary: list all advisors
+      operationId: listAdvisors
+      parameters:
+        - in: query
+          name: offset
+          description: offset for retrieving search results
+          required: false
+          schema:
+            type: integer
+            format: int64
+            example: 0
+            minimum: 0
+        - in: query
+          name: limit
+          description: number of results per page (default 25, max 60)
+          required: false
+          schema:
+            type: integer
+            format: int64
+            example: 25
+            minimum: 1
+            maximum: 60
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAdvisorsResponse'
+        '400':
+          description: invalid offset or limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /advising/admin/rules/{ruleId}:
     put:
       tags:
@@ -846,6 +892,7 @@ paths:
                 $ref: '#/components/schemas/GetAdvisorResponse'
               example:
                 advisorId: advisor-uuid-1
+                advisorName: Advisor One
         '400':
           description: missing claim in token
           content:
@@ -1637,6 +1684,54 @@ components:
         - configKey
         - value
 
+    AdvisorUser:
+      type: object
+      properties:
+        advisorId:
+          type: string
+          description: Cognito user sub for the advisor.
+        username:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastModifiedAt:
+          type: string
+          format: date-time
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - advisorId
+        - username
+        - enabled
+        - status
+
+    ListAdvisorsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdvisorUser'
+        pagination:
+          $ref: '#/components/schemas/PaginationParams'
+        links:
+          $ref: '#/components/schemas/PaginationLinks'
+      required:
+        - data
+        - pagination
+        - links
+
     ListRulesResponse:
       type: object
       properties:
@@ -1680,8 +1775,11 @@ components:
       properties:
         advisorId:
           type: string
+        advisorName:
+          type: string
       required:
         - advisorId
+        - advisorName
 
     BookingCreatedResponse:
       type: object

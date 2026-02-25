@@ -12,13 +12,20 @@ import {
   GetCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
+import {
+  CognitoIdentityProviderClient,
+  ListUsersCommand,
+  type AttributeType,
+} from '@aws-sdk/client-cognito-identity-provider';
 import { errorResponse } from '../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
+const cognito = new CognitoIdentityProviderClient({});
 
 const RULES_TABLE = process.env.ADVISING_RULES_TABLE!;
 const STUDENTS_TABLE = process.env.STUDENTS_TABLE!;
+const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
 
 export const handler = async (
   event: APIGatewayProxyEvent,
@@ -100,8 +107,55 @@ export const handler = async (
     );
   }
 
+  let advisorName: string;
+  try {
+    advisorName = await lookupAdvisorName(assignedAdvisorId);
+  } catch (err) {
+    console.error('Error fetching advisor:', err);
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
+  }
+
+  if (!advisorName) {
+    return errorResponse(404, 'RESOURCE_NOT_FOUND', 'Advisor not found');
+  }
+
   return {
     statusCode: 200,
-    body: JSON.stringify({ advisorId: assignedAdvisorId }),
+    body: JSON.stringify({ advisorId: assignedAdvisorId, advisorName }),
   };
 };
+
+async function lookupAdvisorName(advisorId: string): Promise<string> {
+  const result = await cognito.send(
+    new ListUsersCommand({
+      UserPoolId: USER_POOL_ID,
+      Filter: `sub = \"${advisorId}\"`,
+      Limit: 1,
+    }),
+  );
+
+  const user = result.Users?.[0];
+  if (!user) {
+    return '';
+  }
+
+  const attrs = attributesToMap(user.Attributes ?? []);
+  if (attrs.name) {
+    return attrs.name;
+  }
+
+  const given = attrs.given_name ?? '';
+  const family = attrs.family_name ?? '';
+  const combined = `${given} ${family}`.trim();
+  return combined;
+}
+
+function attributesToMap(attributes: AttributeType[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const attr of attributes) {
+    if (attr.Name) {
+      out[attr.Name] = attr.Value ?? '';
+    }
+  }
+  return out;
+}

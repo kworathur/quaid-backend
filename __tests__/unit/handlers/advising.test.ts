@@ -1,4 +1,5 @@
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { CognitoIdentityProviderClient, ListUsersInGroupCommand, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { RDSDataClient, ExecuteStatementCommand } from '@aws-sdk/client-rds-data';
 import { mockClient } from 'aws-sdk-client-mock';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
@@ -12,6 +13,7 @@ process.env.STUDENTS_TABLE = 'StudentsTable';
 process.env.DEGREE_WORKS_CLUSTER_ARN = 'arn:aws:rds:us-east-1:123456789:cluster:test';
 process.env.DEGREE_WORKS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789:secret:test';
 process.env.DEGREE_WORKS_DB_NAME = 'degreeworks';
+process.env.COGNITO_USER_POOL_ID = 'us-east-1_testpool';
 
 import { handler as configHandler } from '../../../src/advising/admin/config/index';
 import { handler as bookingsHandler } from '../../../src/advising/bookings/index';
@@ -20,13 +22,16 @@ import { handler as advisorHandler } from '../../../src/advising/advisor/index';
 import { handler as sessionsHandler } from '../../../src/advising/sessions/index';
 import { handler as rulesHandler } from '../../../src/advising/admin/rules/index';
 import { handler as executeInsightHandler } from '../../../src/advising/insights/_insightId/execute/index';
+import { handler as advisorsHandler } from '../../../src/advising/admin/advisors/index';
 
 const ddbMock = mockClient(DynamoDBDocumentClient);
 const rdsMock = mockClient(RDSDataClient);
+const cognitoMock = mockClient(CognitoIdentityProviderClient);
 
 beforeEach(() => {
   ddbMock.reset();
   rdsMock.reset();
+  cognitoMock.reset();
 });
 
 // Valid v4 UUIDs for test fixtures (Zod v4 validates version + variant bits)
@@ -139,6 +144,13 @@ describe('Student can book an advising session only with their assigned advisor'
         },
       ],
     });
+    cognitoMock.on(ListUsersCommand).resolves({
+      Users: [
+        {
+          Attributes: [{ Name: 'name', Value: 'Advisor One' }],
+        },
+      ],
+    });
 
     const event = createEvent({
       httpMethod: 'GET',
@@ -150,6 +162,7 @@ describe('Student can book an advising session only with their assigned advisor'
 
     const body = JSON.parse(result.body);
     expect(body.advisorId).toEqual('advisor-uuid-1');
+    expect(body.advisorName).toEqual('Advisor One');
   });
 
   it('should return 404 when no rule matches the student', async () => {
@@ -246,6 +259,67 @@ describe('Students cannot book more than one advising session at a time', () => 
   });
 });
 
+// ── 6. Admin can list advisors ──────────────────────────────────────────────
+
+describe('Admin can list advisors', () => {
+  it('should return advisors with pagination metadata', async () => {
+    cognitoMock.on(ListUsersInGroupCommand).resolves({
+      Users: [
+        {
+          Username: 'advisor-1',
+          Enabled: true,
+          UserStatus: 'CONFIRMED',
+          UserCreateDate: new Date('2025-01-01T00:00:00.000Z'),
+          UserLastModifiedDate: new Date('2025-01-02T00:00:00.000Z'),
+          Attributes: [
+            { Name: 'sub', Value: 'sub-1' },
+            { Name: 'email', Value: 'advisor1@example.com' },
+            { Name: 'name', Value: 'Advisor One' },
+          ],
+        },
+      ],
+    });
+
+    const event = createEvent({
+      httpMethod: 'GET',
+      queryStringParameters: { offset: '0', limit: '2' },
+      ...withAdminClaims(),
+    });
+
+    const result = await advisorsHandler(event);
+    expect(result.statusCode).toEqual(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].advisorId).toEqual('sub-1');
+    expect(body.pagination.offset).toEqual(0);
+    expect(body.links.next).toBeNull();
+  });
+
+  it('should provide a next link when more advisors exist', async () => {
+    cognitoMock.on(ListUsersInGroupCommand).resolves({
+      Users: [
+        { Username: 'advisor-1', Attributes: [{ Name: 'sub', Value: 'sub-1' }] },
+        { Username: 'advisor-2', Attributes: [{ Name: 'sub', Value: 'sub-2' }] },
+        { Username: 'advisor-3', Attributes: [{ Name: 'sub', Value: 'sub-3' }] },
+      ],
+    });
+
+    const event = createEvent({
+      httpMethod: 'GET',
+      queryStringParameters: { offset: '0', limit: '2' },
+      ...withAdminClaims(),
+    });
+
+    const result = await advisorsHandler(event);
+    expect(result.statusCode).toEqual(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.data).toHaveLength(2);
+    expect(body.links.next).toEqual('/advising/admin/advisors?offset=2&limit=2');
+  });
+});
+
 // ── 4. A student cannot be assigned to multiple advisors ─────────────────────
 
 describe('A student cannot be assigned to multiple advisors', () => {
@@ -275,6 +349,13 @@ describe('A student cannot be assigned to multiple advisors', () => {
         },
       ],
     });
+    cognitoMock.on(ListUsersCommand).resolves({
+      Users: [
+        {
+          Attributes: [{ Name: 'name', Value: 'Advisor One' }],
+        },
+      ],
+    });
 
     const event = createEvent({
       httpMethod: 'GET',
@@ -287,6 +368,7 @@ describe('A student cannot be assigned to multiple advisors', () => {
     const body = JSON.parse(result.body);
     // Should match the higher-priority (lower number) rule
     expect(body.advisorId).toEqual('advisor-uuid-1');
+    expect(body.advisorName).toEqual('Advisor One');
   });
 });
 

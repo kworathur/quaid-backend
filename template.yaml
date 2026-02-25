@@ -711,10 +711,16 @@ Resources:
             TableName: !Ref AdvisingRulesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !GetAtt CognitoAuthorizerUserPool.Arn
       Environment:
         Variables:
           ADVISING_RULES_TABLE: !Ref AdvisingRulesTable
           STUDENTS_TABLE: !Ref StudentsTable
+          COGNITO_USER_POOL_ID: !Ref CognitoAuthorizerUserPool
       Events:
         GetAdvisor:
           Type: Api
@@ -1170,6 +1176,46 @@ Resources:
           Properties:
             Path: /advising/admin/rules/{ruleId}
             Method: DELETE
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  listAdvisingAdvisorsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/admin/advisors/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: List all advisors in the advising user pool group.
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsersInGroup
+              Resource: !GetAtt CognitoAuthorizerUserPool.Arn
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoAuthorizerUserPool
+      Events:
+        GetAdvisors:
+          Type: Api
+          Properties:
+            Path: /advising/admin/advisors
+            Method: GET
             RestApiId: !Ref BackgroundChecksAPI
             Auth:
               Authorizer: MyCognitoAuth
