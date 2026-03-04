@@ -1358,6 +1358,55 @@ Resources:
     Properties:
       ServiceToken: !GetAtt setupDegreeWorksFunction.Arn
 
+  # ── DegreeWorks Cluster Scheduler (cost savings) ────────────────────────────
+  # Stops the Aurora cluster at 5 PM ET weekdays and keeps it off on weekends.
+  # Starts it at 8 AM ET weekdays.
+
+  DegreeWorksSchedulerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/degreeworks/scheduler/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Starts or stops the DegreeWorks Aurora cluster on a schedule.
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds:StartDBCluster
+                - rds:StopDBCluster
+              Resource: !GetAtt DegreeWorksCluster.DBClusterArn
+      Environment:
+        Variables:
+          DEGREE_WORKS_CLUSTER_ID: !Ref DegreeWorksCluster
+      Events:
+        StartWeekdays:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 13 ? * MON-FRI *)
+            Description: Start DegreeWorks cluster at 8 AM ET (13:00 UTC) weekdays
+            Input: '{"action":"start"}'
+        StopWeekdays:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 22 ? * MON-FRI *)
+            Description: Stop DegreeWorks cluster at 5 PM ET (22:00 UTC) weekdays
+            Input: '{"action":"stop"}'
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+        External:
+          - '@aws-sdk/client-rds'
+
 Outputs:
   ApiUrl:
     Description: API endpoint URL
