@@ -23,6 +23,7 @@ const ddb = DynamoDBDocumentClient.from(ddbClient);
 const rdsData = new RDSDataClient({});
 
 const INSIGHTS_TABLE = process.env.ADVISING_INSIGHTS_TABLE!;
+const INSIGHT_TEMPLATES_TABLE = process.env.ADVISING_INSIGHT_TEMPLATES_TABLE!;
 const CLUSTER_ARN = process.env.DEGREE_WORKS_CLUSTER_ARN!;
 const SECRET_ARN = process.env.DEGREE_WORKS_SECRET_ARN!;
 const DB_NAME = process.env.DEGREE_WORKS_DB_NAME!;
@@ -96,8 +97,8 @@ export const handler = async (
   }
 
   const templateKey = insight.templateKey as TemplateKeyType;
-  const template = INSIGHT_TEMPLATES[templateKey];
-  if (!template) {
+  const templateDefinition = INSIGHT_TEMPLATES[templateKey];
+  if (!templateDefinition) {
     return errorResponse(
       400,
       'BAD_REQUEST',
@@ -108,13 +109,35 @@ export const handler = async (
   const configParams = insight.parameters as Record<string, unknown>;
 
   // Validate stored parameters against template schema
-  const validation = template.paramSchema.safeParse(configParams);
+  const validation = templateDefinition.paramSchema.safeParse(configParams);
   if (!validation.success) {
     return errorResponse(
       400,
       'BAD_REQUEST',
       'Stored parameters are invalid for this template',
     );
+  }
+
+  let templateSql: string;
+  try {
+    const templateResult = await ddb.send(
+      new GetCommand({
+        TableName: INSIGHT_TEMPLATES_TABLE,
+        Key: { templateKey },
+      }),
+    );
+
+    if (!templateResult.Item || typeof templateResult.Item.sql !== 'string') {
+      return errorResponse(
+        404,
+        'RESOURCE_NOT_FOUND',
+        `Template SQL not found for templateKey: ${templateKey}`,
+      );
+    }
+    templateSql = templateResult.Item.sql;
+  } catch (err) {
+    console.error('Error fetching insight template SQL:', err);
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
   // Build RDS named parameter bindings
@@ -138,7 +161,7 @@ export const handler = async (
         resourceArn: CLUSTER_ARN,
         secretArn: SECRET_ARN,
         database: DB_NAME,
-        sql: template.sql,
+        sql: templateSql,
         parameters,
         includeResultMetadata: true,
       }),

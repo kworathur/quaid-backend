@@ -656,6 +656,20 @@ Resources:
         ReadCapacityUnits: 2
         WriteCapacityUnits: 2
 
+  AdvisingInsightTemplatesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-AdvisingInsightTemplatesTable
+      AttributeDefinitions:
+        - AttributeName: templateKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: templateKey
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
   AdvisingRulesTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -1062,6 +1076,8 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AdvisingInsightsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingInsightTemplatesTable
         - Statement:
             - Effect: Allow
               Action:
@@ -1074,6 +1090,7 @@ Resources:
       Environment:
         Variables:
           ADVISING_INSIGHTS_TABLE: !Ref AdvisingInsightsTable
+          ADVISING_INSIGHT_TEMPLATES_TABLE: !Ref AdvisingInsightTemplatesTable
           DEGREE_WORKS_CLUSTER_ARN: !GetAtt DegreeWorksCluster.DBClusterArn
           DEGREE_WORKS_SECRET_ARN: !Ref DegreeWorksSecret
           DEGREE_WORKS_DB_NAME: degreeworks
@@ -1098,6 +1115,110 @@ Resources:
         Sourcemap: true
 
   # ── Admin-scoped Lambda functions ────────────────────────────────────────────
+
+  crudInsightTemplatesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/admin/insight-templates/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Create or list advising insight SQL templates.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingInsightTemplatesTable
+      Environment:
+        Variables:
+          ADVISING_INSIGHT_TEMPLATES_TABLE: !Ref AdvisingInsightTemplatesTable
+      Events:
+        CreateInsightTemplate:
+          Type: Api
+          Properties:
+            Path: /advising/admin/insight-templates
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+        ListInsightTemplates:
+          Type: Api
+          Properties:
+            Path: /advising/admin/insight-templates
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  crudInsightTemplateByKeyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/advising/admin/insight-templates/_templateKey/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Read, update, or delete an advising insight SQL template.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AdvisingInsightTemplatesTable
+      Environment:
+        Variables:
+          ADVISING_INSIGHT_TEMPLATES_TABLE: !Ref AdvisingInsightTemplatesTable
+      Events:
+        GetInsightTemplate:
+          Type: Api
+          Properties:
+            Path: /advising/admin/insight-templates/{templateKey}
+            Method: GET
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+        UpdateInsightTemplate:
+          Type: Api
+          Properties:
+            Path: /advising/admin/insight-templates/{templateKey}
+            Method: PUT
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+        DeleteInsightTemplate:
+          Type: Api
+          Properties:
+            Path: /advising/admin/insight-templates/{templateKey}
+            Method: DELETE
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/advising.admin
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
 
   crudAssignmentRulesFunction:
     Type: AWS::Serverless::Function

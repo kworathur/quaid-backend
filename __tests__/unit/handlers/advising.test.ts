@@ -9,6 +9,7 @@ process.env.ADVISING_CONFIG_TABLE = 'AdvisingConfigTable';
 process.env.ADVISING_SLOTS_TABLE = 'AdvisingSlotsTable';
 process.env.ADVISING_RULES_TABLE = 'AdvisingRulesTable';
 process.env.ADVISING_INSIGHTS_TABLE = 'AdvisingInsightsTable';
+process.env.ADVISING_INSIGHT_TEMPLATES_TABLE = 'AdvisingInsightTemplatesTable';
 process.env.STUDENTS_TABLE = 'StudentsTable';
 process.env.DEGREE_WORKS_CLUSTER_ARN = 'arn:aws:rds:us-east-1:123456789:cluster:test';
 process.env.DEGREE_WORKS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789:secret:test';
@@ -433,14 +434,22 @@ describe('Advising mapping rule with non-existent parameters fails with appropri
 describe('Attendance insight triggers successfully for absentee student', () => {
   it('should execute the insight query and return results for the student', async () => {
     // Insight record in DynamoDB
-    ddbMock.on(GetCommand).resolves({
-      Item: {
-        insightId: 'insight-1',
-        advisorId: 'advisor-uuid-1',
-        templateKey: 'CREDENTIALS_NEAR_COMPLETION',
-        parameters: { threshold_percentage: 80 },
-      },
-    });
+    ddbMock
+      .on(GetCommand)
+      .resolvesOnce({
+        Item: {
+          insightId: 'insight-1',
+          advisorId: 'advisor-uuid-1',
+          templateKey: 'CREDENTIALS_NEAR_COMPLETION',
+          parameters: { threshold_percentage: 80 },
+        },
+      })
+      .resolvesOnce({
+        Item: {
+          templateKey: 'CREDENTIALS_NEAR_COMPLETION',
+          sql: 'SELECT 1 WHERE :student_id = :student_id',
+        },
+      });
 
     // RDS Data API returns rows
     rdsMock.on(ExecuteStatementCommand).resolves({
@@ -476,14 +485,16 @@ describe('Attendance insight triggers successfully for absentee student', () => 
   });
 
   it('should return 403 when advisor tries to execute another advisor\'s insight', async () => {
-    ddbMock.on(GetCommand).resolves({
-      Item: {
-        insightId: 'insight-1',
-        advisorId: 'advisor-uuid-OTHER',
-        templateKey: 'CREDENTIALS_NEAR_COMPLETION',
-        parameters: { threshold_percentage: 80 },
-      },
-    });
+    ddbMock
+      .on(GetCommand)
+      .resolvesOnce({
+        Item: {
+          insightId: 'insight-1',
+          advisorId: 'advisor-uuid-OTHER',
+          templateKey: 'CREDENTIALS_NEAR_COMPLETION',
+          parameters: { threshold_percentage: 80 },
+        },
+      });
 
     const event = createEvent({
       httpMethod: 'GET',
