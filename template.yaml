@@ -31,17 +31,8 @@ Parameters:
     Type: String
     Default: quaid/melissa-api-key
     Description: SSM Parameter Store name for Melissa API key (without leading /)
-  DegreeWorksPsqlAllowedCidr:
-    Type: String
-    Default: 0.0.0.0/0
-    Description: CIDR block allowed to connect to DegreeWorks PostgreSQL (set to your IP/32 for security)
-  DegreeWorksVpcId:
-    Type: String
-    Default: ''
-    Description: Optional VPC ID for DegreeWorks. Set to create and attach a PostgreSQL security group for psql access.
 Conditions:
   IsProd: !Equals [!Ref EnvironmentType, 'prod']
-  HasDegreeWorksVpcId: !Not [!Equals [!Ref DegreeWorksVpcId, '']]
 
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
@@ -198,10 +189,6 @@ Resources:
             Path: /students
             Method: GET
             RestApiId: !Ref BackgroundChecksAPI
-            Auth:
-              Authorizer: MyCognitoAuth
-              AuthorizationScopes:
-                - com.apigw/advising.admin
 
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
@@ -1438,28 +1425,11 @@ Resources:
       MasterUsername: !Sub '{{resolve:secretsmanager:${DegreeWorksSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DegreeWorksSecret}:SecretString:password}}'
       EnableHttpEndpoint: true
-      VpcSecurityGroupIds: !If
-        - HasDegreeWorksVpcId
-        - - !Ref DegreeWorksPostgresSecurityGroup
-        - !Ref AWS::NoValue
       ServerlessV2ScalingConfiguration:
         MinCapacity: 0.5
         MaxCapacity: 4
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-
-  DegreeWorksPostgresSecurityGroup:
-    Condition: HasDegreeWorksVpcId
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub ${AWS::StackName} DegreeWorks PostgreSQL access
-      VpcId: !Ref DegreeWorksVpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: !Ref DegreeWorksPsqlAllowedCidr
-          Description: Allow inbound PostgreSQL access for psql clients
 
   DegreeWorksDBInstance:
     Type: AWS::RDS::DBInstance
@@ -1467,7 +1437,6 @@ Resources:
       DBClusterIdentifier: !Ref DegreeWorksCluster
       DBInstanceClass: db.serverless
       Engine: aurora-postgresql
-      PubliclyAccessible: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
 
