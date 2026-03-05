@@ -985,6 +985,7 @@ Resources:
             Auth:
               Authorizer: MyCognitoAuth
               AuthorizationScopes:
+                - com.apigw/advising.admin
                 - com.apigw/advising.advisor
         ListInsights:
           Type: Api
@@ -995,6 +996,7 @@ Resources:
             Auth:
               Authorizer: MyCognitoAuth
               AuthorizationScopes:
+                - com.apigw/advising.admin
                 - com.apigw/advising.advisor
     Metadata:
       BuildMethod: esbuild
