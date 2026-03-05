@@ -230,36 +230,36 @@ describe('Address Liveness Integration Tests', () => {
     expect(response.status).toBe(201);
   });
 
-  // test('should initiate address liveness check', async () => {
-  //   expect(studentId).toBeDefined();
+  test('should initiate address liveness check', async () => {
+    expect(studentId).toBeDefined();
 
-  //   const response = await apiRequest('POST', `/students/${studentId}/checks/addressLiveness`);
+    const response = await apiRequest('POST', `/students/${studentId}/checks/addressLiveness`);
 
-  //   if (response.status !== 200) {
-  //     console.error('Initiate address liveness check failed:', JSON.stringify(response.body, null, 2));
-  //   }
-  //   expect(response.status).toBe(200);
-  //   expect(response.body.status).toBe('success');
-  //   expect(response.body.data.status).toBe('QUEUED');
-  //   expect(response.body.data.inquiryId).toBeDefined();
+    if (response.status !== 200) {
+      console.error('Initiate address liveness check failed:', JSON.stringify(response.body, null, 2));
+    }
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('success');
+    expect(response.body.data.status).toBe('QUEUED');
+    expect(response.body.data.inquiryId).toBeDefined();
 
-  //   inquiryId = response.body.data.inquiryId;
-  // });
+    inquiryId = response.body.data.inquiryId;
+  });
 
-  // test('should complete address liveness check with Melissa verification result', async () => {
-  //   expect(studentId).toBeDefined();
-  //   expect(inquiryId).toBeDefined();
+  test('should complete address liveness check with Melissa verification result', async () => {
+    expect(studentId).toBeDefined();
+    expect(inquiryId).toBeDefined();
 
-  //   const { status, result } = await pollForCompletion(studentId, inquiryId);
+    const { status, result } = await pollForCompletion(studentId, inquiryId);
 
-  //   expect(status).toBe('COMPLETED');
-  //   expect(result).toBeDefined();
+    expect(status).toBe('COMPLETED');
+    expect(result).toBeDefined();
 
-  //   // Verify expected result fields from Melissa API
-  //   expect(result).toHaveProperty('addressValid');
-  //   expect(result).toHaveProperty('deliverability');
-  //   expect(result).toHaveProperty('addressType');
-  //   expect(result).toHaveProperty('nameMatch');
-  //   expect(result).toHaveProperty('recentMove');
-  // });
+    // Verify expected result fields from Melissa API
+    expect(result).toHaveProperty('addressValid');
+    expect(result).toHaveProperty('deliverability');
+    expect(result).toHaveProperty('addressType');
+    expect(result).toHaveProperty('nameMatch');
+    expect(result).toHaveProperty('recentMove');
+  });
 });

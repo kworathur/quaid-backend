@@ -120,8 +120,27 @@ jobs:
       - name: Deploy to feature stack in the testing account
         shell: bash
         run: |
+          DEGREEWORKS_VPC_ID=$(aws ec2 describe-vpcs \
+            --region ${TESTING_REGION} \
+            --filters Name=isDefault,Values=true \
+            --query 'Vpcs[0].VpcId' \
+            --output text)
+
+          if [ -z "${DEGREEWORKS_VPC_ID}" ] || [ "${DEGREEWORKS_VPC_ID}" = "None" ]; then
+            DEGREEWORKS_VPC_ID=$(aws ec2 describe-vpcs \
+              --region ${TESTING_REGION} \
+              --query 'Vpcs[0].VpcId' \
+              --output text)
+          fi
+
+          if [ -z "${DEGREEWORKS_VPC_ID}" ] || [ "${DEGREEWORKS_VPC_ID}" = "None" ]; then
+            echo "No VPC found in region ${TESTING_REGION}; cannot set DegreeWorksVpcId"
+            exit 1
+          fi
+
+          echo "Using DegreeWorksVpcId=${DEGREEWORKS_VPC_ID}"
           sam deploy --stack-name $(echo ${GITHUB_REF##*/} | tr -cd '[a-zA-Z0-9-]') \
-            --parameter-overrides Email=kworathur3@gatech.edu EnvironmentType=dev CallbackUrl=https://oauth.pstmn.io/v1/callback MelissaApiKeyParameterName=quaid/melissa-api-key \
+            --parameter-overrides Email=kworathur3@gatech.edu EnvironmentType=dev CallbackUrl=https://oauth.pstmn.io/v1/callback MelissaApiKeyParameterName=quaid/melissa-api-key DegreeWorksVpcId=${DEGREEWORKS_VPC_ID} DegreeWorksPsqlAllowedCidr=0.0.0.0/0 \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
@@ -221,9 +240,28 @@ jobs:
 
       - name: Deploy to testing account
         run: |
+          DEGREEWORKS_VPC_ID=$(aws ec2 describe-vpcs \
+            --region ${TESTING_REGION} \
+            --filters Name=isDefault,Values=true \
+            --query 'Vpcs[0].VpcId' \
+            --output text)
+
+          if [ -z "${DEGREEWORKS_VPC_ID}" ] || [ "${DEGREEWORKS_VPC_ID}" = "None" ]; then
+            DEGREEWORKS_VPC_ID=$(aws ec2 describe-vpcs \
+              --region ${TESTING_REGION} \
+              --query 'Vpcs[0].VpcId' \
+              --output text)
+          fi
+
+          if [ -z "${DEGREEWORKS_VPC_ID}" ] || [ "${DEGREEWORKS_VPC_ID}" = "None" ]; then
+            echo "No VPC found in region ${TESTING_REGION}; cannot set DegreeWorksVpcId"
+            exit 1
+          fi
+
+          echo "Using DegreeWorksVpcId=${DEGREEWORKS_VPC_ID}"
           sam deploy --stack-name ${TESTING_STACK_NAME} \
             --template packaged-testing.yaml \
-            --parameter-overrides Email=kworathur3@gatech.edu EnvironmentType=dev CallbackUrl=https://oauth.pstmn.io/v1/callback MelissaApiKeyParameterName=quaid/melissa-api-key \
+            --parameter-overrides Email=kworathur3@gatech.edu EnvironmentType=dev CallbackUrl=https://oauth.pstmn.io/v1/callback MelissaApiKeyParameterName=quaid/melissa-api-key DegreeWorksVpcId=${DEGREEWORKS_VPC_ID} DegreeWorksPsqlAllowedCidr=0.0.0.0/0 \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
@@ -312,9 +350,39 @@ jobs:
 
       - name: Deploy to production account
         run: |
+          DEGREEWORKS_VPC_ID=$(aws ec2 describe-vpcs \
+            --region ${PROD_REGION} \
+            --filters Name=isDefault,Values=true \
+            --query 'Vpcs[0].VpcId' \
+            --output text)
+
+          if [ -z "${DEGREEWORKS_VPC_ID}" ] || [ "${DEGREEWORKS_VPC_ID}" = "None" ]; then
+            DEGREEWORKS_VPC_ID=$(aws ec2 describe-vpcs \
+              --region ${PROD_REGION} \
+              --query 'Vpcs[0].VpcId' \
+              --output text)
+          fi
+
+          if [ -z "${DEGREEWORKS_VPC_ID}" ] || [ "${DEGREEWORKS_VPC_ID}" = "None" ]; then
+            echo "No VPC found in region ${PROD_REGION}; cannot set DegreeWorksVpcId"
+            exit 1
+          fi
+
+          DEGREEWORKS_VPC_CIDR=$(aws ec2 describe-vpcs \
+            --region ${PROD_REGION} \
+            --vpc-ids ${DEGREEWORKS_VPC_ID} \
+            --query 'Vpcs[0].CidrBlock' \
+            --output text)
+
+          if [ -z "${DEGREEWORKS_VPC_CIDR}" ] || [ "${DEGREEWORKS_VPC_CIDR}" = "None" ]; then
+            echo "Could not resolve CIDR for VPC ${DEGREEWORKS_VPC_ID}"
+            exit 1
+          fi
+
+          echo "Using DegreeWorksVpcId=${DEGREEWORKS_VPC_ID} DegreeWorksPsqlAllowedCidr=${DEGREEWORKS_VPC_CIDR}"
           sam deploy --stack-name ${PROD_STACK_NAME} \
             --template packaged-prod.yaml \
-            --parameter-overrides Email=keshavworathur@gmail.com EnvironmentType=prod CallbackUrl=https://oauth.pstmn.io/v1/callback CertificateArn=arn:aws:acm:us-east-1:705948898164:certificate/ea028d43-5982-4b5a-a28e-798ff22f315e MelissaApiKeyParameterName=quaid/melissa-api-key \
+            --parameter-overrides Email=keshavworathur@gmail.com EnvironmentType=prod CallbackUrl=https://oauth.pstmn.io/v1/callback CertificateArn=arn:aws:acm:us-east-1:705948898164:certificate/ea028d43-5982-4b5a-a28e-798ff22f315e MelissaApiKeyParameterName=quaid/melissa-api-key DegreeWorksVpcId=${DEGREEWORKS_VPC_ID} DegreeWorksPsqlAllowedCidr=${DEGREEWORKS_VPC_CIDR} \
             --capabilities CAPABILITY_IAM \
             --region ${PROD_REGION} \
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
