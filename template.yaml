@@ -44,6 +44,9 @@ Resources:
       UserPoolName: !Sub ${AWS::StackName}-userpool
       LambdaConfig:
         PreTokenGeneration: !GetAtt advisingPreTokenFunction.Arn
+        PreTokenGenerationConfig:
+          LambdaArn: !GetAtt advisingPreTokenFunction.Arn
+          LambdaVersion: V2_0
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
 

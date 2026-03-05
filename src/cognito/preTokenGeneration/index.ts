@@ -11,6 +11,7 @@
  */
 
 interface CognitoPreTokenEvent {
+  version?: string;
   triggerSource: string;
   request: {
     groupConfiguration?: {
@@ -23,6 +24,23 @@ interface CognitoPreTokenEvent {
     claimsOverrideDetails?: {
       claimsToAddOrOverride?: Record<string, string>;
       claimsToSuppress?: string[];
+      groupOverrideDetails?: {
+        groupsToOverride?: string[];
+        iamRolesToOverride?: string[];
+        preferredRole?: string;
+      };
+    };
+    claimsAndScopeOverrideDetails?: {
+      idTokenGeneration?: {
+        claimsToAddOrOverride?: Record<string, string>;
+        claimsToSuppress?: string[];
+      };
+      accessTokenGeneration?: {
+        claimsToAddOrOverride?: Record<string, string>;
+        claimsToSuppress?: string[];
+        scopesToAdd?: string[];
+        scopesToSuppress?: string[];
+      };
       groupOverrideDetails?: {
         groupsToOverride?: string[];
         iamRolesToOverride?: string[];
@@ -69,7 +87,25 @@ export const handler = async (
     claimsToAddOrOverride['custom:studentId'] = studentId;
   }
 
-  if (Object.keys(claimsToAddOrOverride).length > 0) {
+  const hasClaims = Object.keys(claimsToAddOrOverride).length > 0;
+  const parsedVersion = Number.parseInt(event.version ?? '1', 10);
+  const isV2OrLater = Number.isFinite(parsedVersion) && parsedVersion >= 2;
+
+  if (hasClaims && isV2OrLater) {
+    event.response.claimsAndScopeOverrideDetails = {
+      idTokenGeneration: {
+        claimsToAddOrOverride,
+      },
+      accessTokenGeneration: {
+        claimsToAddOrOverride: studentId
+          ? { 'custom:studentId': studentId }
+          : undefined,
+        scopesToAdd: advisingScopes,
+      },
+      groupOverrideDetails: event.response.claimsOverrideDetails
+        ?.groupOverrideDetails,
+    };
+  } else if (hasClaims) {
     event.response.claimsOverrideDetails = {
       claimsToAddOrOverride,
     };
