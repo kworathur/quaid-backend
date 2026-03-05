@@ -45,7 +45,6 @@ export const handler = async (
 
   const groups: string[] =
     event.request.groupConfiguration?.groupsToOverride ?? [];
-
   const studentId =
     event.request.userAttributes?.['custom:studentId'] ??
     event.request.clientMetadata?.studentId;
@@ -75,6 +74,6 @@ export const handler = async (
       claimsToAddOrOverride,
     };
   }
-
+  console.log('Injected claims ', event);
   return event;
 };
