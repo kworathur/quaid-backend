@@ -31,6 +31,10 @@ export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   console.info('received:', event);
+  console.info(
+    'received authorizer claims ',
+    event.requestContext?.authorizer?.claims,
+  );
 
   const studentIdClaim =
     event.requestContext?.authorizer?.claims?.['custom:studentId'];
