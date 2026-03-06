@@ -29,6 +29,7 @@ const UpdateInsightRequest = z.object({
   name: z.string().min(1).optional(),
   templateKey: TemplateKey.optional(),
   parameters: z.record(z.string(), z.unknown()).optional(),
+  messageTemplate: z.string().min(1).optional(),
 });
 
 export const handler = async (
@@ -155,6 +156,10 @@ async function updateInsight(
     if (body.parameters !== undefined) {
       updateParts.push('parameters = :p');
       eav[':p'] = body.parameters;
+    }
+    if (body.messageTemplate !== undefined) {
+      updateParts.push('messageTemplate = :mt');
+      eav[':mt'] = body.messageTemplate;
     }
 
     await ddb.send(

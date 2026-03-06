@@ -35,6 +35,7 @@ export const Insight = z.object({
   name: z.string(),
   templateKey: TemplateKey,
   parameters: z.record(z.string(), z.unknown()),
+  messageTemplate: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

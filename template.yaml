@@ -1083,6 +1083,8 @@ Resources:
             TableName: !Ref AdvisingInsightsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref AdvisingInsightTemplatesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref StudentsTable
         - Statement:
             - Effect: Allow
               Action:
@@ -1096,6 +1098,7 @@ Resources:
         Variables:
           ADVISING_INSIGHTS_TABLE: !Ref AdvisingInsightsTable
           ADVISING_INSIGHT_TEMPLATES_TABLE: !Ref AdvisingInsightTemplatesTable
+          STUDENTS_TABLE: !Ref StudentsTable
           DEGREE_WORKS_CLUSTER_ARN: !GetAtt DegreeWorksCluster.DBClusterArn
           DEGREE_WORKS_SECRET_ARN: !Ref DegreeWorksSecret
           DEGREE_WORKS_DB_NAME: degreeworks

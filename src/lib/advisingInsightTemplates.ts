@@ -73,6 +73,8 @@ export interface InsightTemplate {
   sql: string;
   /** Names of parameters that come from the stored insight config (not from the request) */
   configParamNames: string[];
+  /** Default message template using {{column_name}} placeholders, applied per row */
+  defaultMessageTemplate: string;
 }
 
 export const INSIGHT_TEMPLATES: Record<TemplateKeyType, InsightTemplate> = {
@@ -82,6 +84,8 @@ export const INSIGHT_TEMPLATES: Record<TemplateKeyType, InsightTemplate> = {
     paramSchema: CredentialsNearCompletionParams,
     sql: CREDENTIALS_NEAR_COMPLETION_SQL,
     configParamNames: ['threshold_percentage'],
+    defaultMessageTemplate:
+      '{{program_name}} ({{program_code}}): {{completion_pct}}% of required courses completed.',
   },
   SCHOLARSHIP_ELIGIBILITY: {
     description:
@@ -89,6 +93,8 @@ export const INSIGHT_TEMPLATES: Record<TemplateKeyType, InsightTemplate> = {
     paramSchema: ScholarshipEligibilityParams,
     sql: SCHOLARSHIP_ELIGIBILITY_SQL,
     configParamNames: ['scholarship_name'],
+    defaultMessageTemplate:
+      '{{scholarship_name}} — Status: {{status}}. {{reason}}',
   },
   SUGGESTED_COURSES: {
     description:
@@ -96,5 +102,18 @@ export const INSIGHT_TEMPLATES: Record<TemplateKeyType, InsightTemplate> = {
     paramSchema: SuggestedCoursesParams,
     sql: SUGGESTED_COURSES_SQL,
     configParamNames: ['department'],
+    defaultMessageTemplate:
+      '{{subject_code}} {{course_number}} — {{course_name}} ({{credit_hours}} credits)',
   },
 };
+
+/** Render a message template by replacing {{column}} placeholders with row values */
+export function renderMessageTemplate(
+  template: string,
+  row: Record<string, unknown>,
+): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+    const value = row[key];
+    return value == null ? '' : String(value);
+  });
+}

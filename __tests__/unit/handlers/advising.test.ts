@@ -445,6 +445,9 @@ describe('Attendance insight triggers successfully for absentee student', () => 
         },
       })
       .resolvesOnce({
+        Item: { id: 42, name: 'Jane Doe' },
+      })
+      .resolvesOnce({
         Item: {
           templateKey: 'CREDENTIALS_NEAR_COMPLETION',
           sql: 'SELECT 1 WHERE :student_id = :student_id',
@@ -482,6 +485,8 @@ describe('Attendance insight triggers successfully for absentee student', () => 
     expect(body.data[0].program_name).toEqual('Computer Science');
     expect(body.data[0].completion_pct).toEqual(85.5);
     expect(body.studentId).toEqual(42);
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0]).toContain('Computer Science');
   });
 
   it('should return 403 when advisor tries to execute another advisor\'s insight', async () => {

@@ -28,6 +28,7 @@ const CreateInsightRequest = z.object({
   name: z.string().min(1),
   templateKey: TemplateKey,
   parameters: z.record(z.string(), z.unknown()),
+  messageTemplate: z.string().min(1).optional(),
 });
 
 export const handler = async (
@@ -84,7 +85,7 @@ async function createInsight(
 
   const now = new Date().toISOString();
   const insightId = uuidv4();
-  const item = {
+  const item: Record<string, unknown> = {
     insightId,
     advisorId,
     name: body.name,
@@ -93,6 +94,9 @@ async function createInsight(
     createdAt: now,
     updatedAt: now,
   };
+  if (body.messageTemplate) {
+    item.messageTemplate = body.messageTemplate;
+  }
 
   try {
     await ddb.send(new PutCommand({ TableName: INSIGHTS_TABLE, Item: item }));

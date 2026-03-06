@@ -14,7 +14,10 @@ import {
   ExecuteStatementCommand,
   Field,
 } from '@aws-sdk/client-rds-data';
-import { INSIGHT_TEMPLATES } from '../../../../lib/advisingInsightTemplates';
+import {
+  INSIGHT_TEMPLATES,
+  renderMessageTemplate,
+} from '../../../../lib/advisingInsightTemplates';
 import type { TemplateKeyType } from '../../../../lib/types/advising';
 import { errorResponse } from '../../../../lib/serverResponseBuilder';
 
@@ -24,6 +27,7 @@ const rdsData = new RDSDataClient({});
 
 const INSIGHTS_TABLE = process.env.ADVISING_INSIGHTS_TABLE!;
 const INSIGHT_TEMPLATES_TABLE = process.env.ADVISING_INSIGHT_TEMPLATES_TABLE!;
+const STUDENTS_TABLE = process.env.STUDENTS_TABLE!;
 const CLUSTER_ARN = process.env.DEGREE_WORKS_CLUSTER_ARN!;
 const SECRET_ARN = process.env.DEGREE_WORKS_SECRET_ARN!;
 const DB_NAME = process.env.DEGREE_WORKS_DB_NAME!;
@@ -118,6 +122,20 @@ export const handler = async (
     );
   }
 
+  // Fetch student name for message template variable
+  let studentName = '';
+  try {
+    const studentResult = await ddb.send(
+      new GetCommand({ TableName: STUDENTS_TABLE, Key: { id: studentId } }),
+    );
+    if (studentResult.Item && typeof studentResult.Item.name === 'string') {
+      studentName = studentResult.Item.name;
+    }
+  } catch (err) {
+    console.error('Error fetching student name:', err);
+    // Non-fatal — continue with empty student name
+  }
+
   let templateSql: string;
   try {
     const templateResult = await ddb.send(
@@ -179,8 +197,17 @@ export const handler = async (
     return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 
+  // Resolve message template: insight override → default from template definition
+  const messageTemplate =
+    (insight.messageTemplate as string | undefined) ??
+    templateDefinition.defaultMessageTemplate;
+
+  const messages = rows.map((row) =>
+    renderMessageTemplate(messageTemplate, { ...row, student_name: studentName }),
+  );
+
   return {
     statusCode: 200,
-    body: JSON.stringify({ data: rows, insightId, studentId }),
+    body: JSON.stringify({ data: rows, messages, insightId, studentId }),
   };
 };
