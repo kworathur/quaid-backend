@@ -135,8 +135,9 @@ Resources:
           MyCognitoAuth:
             UserPoolArn: !GetAtt CognitoAuthorizerUserPool.Arn
             AuthorizationScopes:
-              - com.apigw/scope1
-
+              - com.apigw/advising.student
+              - com.apigw/advising.advisor
+              - com.apigw/advising.admin
   CustomDomain:
     Type: AWS::ApiGateway::DomainName
     Condition: IsProd
