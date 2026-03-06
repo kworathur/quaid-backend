@@ -12,20 +12,14 @@ import {
   GetCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
-import {
-  CognitoIdentityProviderClient,
-  ListUsersCommand,
-  type AttributeType,
-} from '@aws-sdk/client-cognito-identity-provider';
 import { errorResponse } from '../../lib/serverResponseBuilder';
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
-const cognito = new CognitoIdentityProviderClient({});
 
 const RULES_TABLE = process.env.ADVISING_RULES_TABLE!;
 const STUDENTS_TABLE = process.env.STUDENTS_TABLE!;
-const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
+const PROFILES_TABLE = process.env.PROFILES_TABLE!;
 
 export const handler = async (
   event: APIGatewayProxyEvent,
@@ -126,36 +120,17 @@ export const handler = async (
 };
 
 async function lookupAdvisorName(advisorId: string): Promise<string> {
-  const result = await cognito.send(
-    new ListUsersCommand({
-      UserPoolId: USER_POOL_ID,
-      Filter: `sub = "${advisorId}"`,
-      Limit: 1,
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: PROFILES_TABLE,
+      Key: { userSub: advisorId },
     }),
   );
-
-  const user = result.Users?.[0];
-  if (!user) {
+  if (!result.Item || result.Item.userSub !== advisorId) {
     return '';
   }
-
-  const attrs = attributesToMap(user.Attributes ?? []);
-  if (attrs.name) {
-    return attrs.name;
+  if (typeof result.Item.name === 'string') {
+    return result.Item.name;
   }
-
-  const given = attrs.given_name ?? '';
-  const family = attrs.family_name ?? '';
-  const combined = `${given} ${family}`.trim();
-  return combined;
-}
-
-function attributesToMap(attributes: AttributeType[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const attr of attributes) {
-    if (attr.Name) {
-      out[attr.Name] = attr.Value ?? '';
-    }
-  }
-  return out;
+  return '';
 }

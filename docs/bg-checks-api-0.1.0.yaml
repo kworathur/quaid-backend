@@ -883,7 +883,7 @@ paths:
     get:
       tags:
         - advising
-      description: find the advisor for the current student using the advisor-advisee mappings
+      description: find the advisor for the current student using the advisor-advisee mappings and resolve advisor display name from ProfilesTable
       operationId: getLoggedInUserAdvisor
       responses:
         '200':
@@ -902,7 +902,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: no advisor assigned or student not found
+          description: no advisor assigned, student not found, or advisor profile not found
           content:
             application/json:
               schema:
@@ -1389,7 +1389,7 @@ paths:
     post:
       tags:
         - testing
-      description: bulk create Cognito users for automated frontend testing
+      description: bulk create Cognito users for automated frontend testing; creates StudentsTable rows when `student` is provided and ProfilesTable rows for advisor/admin users
       operationId: bulkCreateTestUsers
       requestBody:
         required: true
@@ -1418,6 +1418,10 @@ paths:
                       temporaryPassword: TempPass123!
                       groups:
                         - advising-advisor
+                      profile:
+                        name: Advisor One
+                        title: Senior Advisor
+                        department: Computer Science
       responses:
         '200':
           description: all users created successfully
@@ -1463,7 +1467,7 @@ paths:
     delete:
       tags:
         - testing
-      description: bulk delete Cognito users for automated frontend testing
+      description: bulk delete Cognito users for automated frontend testing; also deletes linked StudentsTable and ProfilesTable records when present
       operationId: bulkDeleteTestUsers
       requestBody:
         required: true
@@ -2293,8 +2297,23 @@ components:
             type: string
         student:
           $ref: '#/components/schemas/BulkStudentSeed'
+        profile:
+          $ref: '#/components/schemas/BulkProfileSeed'
       required:
         - username
+
+    BulkProfileSeed:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+      required:
+        - name
 
     BulkStudentSeed:
       type: object

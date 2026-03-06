@@ -1,13 +1,13 @@
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand, PutCommand, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import {
   AdminAddUserToGroupCommand,
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
+  AdminGetUserCommand,
   AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
   ListUsersInGroupCommand,
-  ListUsersCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { RDSDataClient, ExecuteStatementCommand } from '@aws-sdk/client-rds-data';
 import { mockClient } from 'aws-sdk-client-mock';
@@ -20,6 +20,7 @@ process.env.ADVISING_RULES_TABLE = 'AdvisingRulesTable';
 process.env.ADVISING_INSIGHTS_TABLE = 'AdvisingInsightsTable';
 process.env.ADVISING_INSIGHT_TEMPLATES_TABLE = 'AdvisingInsightTemplatesTable';
 process.env.STUDENTS_TABLE = 'StudentsTable';
+process.env.PROFILES_TABLE = 'ProfilesTable';
 process.env.DEGREE_WORKS_CLUSTER_ARN = 'arn:aws:rds:us-east-1:123456789:cluster:test';
 process.env.DEGREE_WORKS_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789:secret:test';
 process.env.DEGREE_WORKS_DB_NAME = 'degreeworks';
@@ -140,9 +141,14 @@ describe('Admin can pause all advising bookings', () => {
 describe('Student can book an advising session only with their assigned advisor', () => {
   it('should resolve the correct advisor via LAST_NAME_RANGE rule', async () => {
     // Student record
-    ddbMock.on(GetCommand).resolves({
-      Item: { id: 1, name: 'Jane Martinez' },
-    });
+    ddbMock
+      .on(GetCommand)
+      .resolvesOnce({
+        Item: { id: 1, name: 'Jane Martinez' },
+      })
+      .resolvesOnce({
+        Item: { userSub: 'advisor-uuid-1', name: 'Advisor One' },
+      });
 
     // One active rule: last names M-Z → advisor-uuid-1
     ddbMock.on(ScanCommand).resolves({
@@ -157,14 +163,6 @@ describe('Student can book an advising session only with their assigned advisor'
         },
       ],
     });
-    cognitoMock.on(ListUsersCommand).resolves({
-      Users: [
-        {
-          Attributes: [{ Name: 'name', Value: 'Advisor One' }],
-        },
-      ],
-    });
-
     const event = createEvent({
       httpMethod: 'GET',
       ...withStudentClaims(1),
@@ -432,8 +430,24 @@ describe('Bookings endpoint supports both student and advisor queries', () => {
 describe('Bulk test users endpoint', () => {
   it('should bulk create users and add groups', async () => {
     cognitoMock.on(AdminCreateUserCommand).resolves({});
+    cognitoMock
+      .on(AdminGetUserCommand)
+      .resolvesOnce({
+        UserAttributes: [
+          { Name: 'sub', Value: 'student-sub-1' },
+          { Name: 'email', Value: 'pw-e2e-student-1@example.com' },
+        ],
+      })
+      .resolvesOnce({
+        UserAttributes: [
+          { Name: 'sub', Value: 'advisor-sub-1' },
+          { Name: 'email', Value: 'pw-e2e-advisor-1@example.com' },
+          { Name: 'name', Value: 'Advisor One' },
+        ],
+      });
     cognitoMock.on(AdminSetUserPasswordCommand).resolves({});
     cognitoMock.on(AdminAddUserToGroupCommand).resolves({});
+    ddbMock.on(PutCommand).resolves({});
 
     const event = createEvent({
       httpMethod: 'POST',
@@ -477,6 +491,9 @@ describe('Bulk test users endpoint', () => {
       .on(AdminCreateUserCommand)
       .resolvesOnce({})
       .rejectsOnce(new Error('User already exists'));
+    cognitoMock.on(AdminGetUserCommand).resolves({
+      UserAttributes: [{ Name: 'sub', Value: 'student-sub-1' }],
+    });
     cognitoMock.on(AdminSetUserPasswordCommand).resolves({});
     cognitoMock.on(AdminAddUserToGroupCommand).resolves({});
 
@@ -502,6 +519,9 @@ describe('Bulk test users endpoint', () => {
 
   it('should store student payload when it matches StudentsTable schema', async () => {
     cognitoMock.on(AdminCreateUserCommand).resolves({});
+    cognitoMock.on(AdminGetUserCommand).resolves({
+      UserAttributes: [{ Name: 'sub', Value: 'student-sub-1001' }],
+    });
     cognitoMock.on(AdminUpdateUserAttributesCommand).resolves({});
     ddbMock.on(UpdateCommand).resolves({ Attributes: { count: 1001 } });
     ddbMock.on(PutCommand).resolves({});
@@ -577,7 +597,19 @@ describe('Bulk test users endpoint', () => {
   });
 
   it('should bulk delete users', async () => {
+    cognitoMock
+      .on(AdminGetUserCommand)
+      .resolvesOnce({
+        UserAttributes: [
+          { Name: 'sub', Value: 'student-sub-1' },
+          { Name: 'custom:studentId', Value: '1001' },
+        ],
+      })
+      .resolvesOnce({
+        UserAttributes: [{ Name: 'sub', Value: 'advisor-sub-1' }],
+      });
     cognitoMock.on(AdminDeleteUserCommand).resolves({});
+    ddbMock.on(DeleteCommand).resolves({});
 
     const event = createEvent({
       httpMethod: 'DELETE',
@@ -593,6 +625,9 @@ describe('Bulk test users endpoint', () => {
     const body = JSON.parse(result.body);
     expect(body.deleted).toEqual(['pw-e2e-student-1', 'pw-e2e-advisor-1']);
     expect(body.failed).toEqual([]);
+
+    const deleteCalls = ddbMock.commandCalls(DeleteCommand);
+    expect(deleteCalls).toHaveLength(3);
   });
 
   it('should return 400 for invalid bulk delete payload', async () => {
@@ -675,9 +710,14 @@ describe('Admin can list advisors', () => {
 
 describe('A student cannot be assigned to multiple advisors', () => {
   it('should match only the first rule by priority and return a single advisor', async () => {
-    ddbMock.on(GetCommand).resolves({
-      Item: { id: 1, name: 'Jane Martinez' },
-    });
+    ddbMock
+      .on(GetCommand)
+      .resolvesOnce({
+        Item: { id: 1, name: 'Jane Martinez' },
+      })
+      .resolvesOnce({
+        Item: { userSub: 'advisor-uuid-1', name: 'Advisor One' },
+      });
 
     // Two overlapping rules — both cover "M", but priority 1 wins
     ddbMock.on(ScanCommand).resolves({
@@ -700,14 +740,6 @@ describe('A student cannot be assigned to multiple advisors', () => {
         },
       ],
     });
-    cognitoMock.on(ListUsersCommand).resolves({
-      Users: [
-        {
-          Attributes: [{ Name: 'name', Value: 'Advisor One' }],
-        },
-      ],
-    });
-
     const event = createEvent({
       httpMethod: 'GET',
       ...withStudentClaims(1),

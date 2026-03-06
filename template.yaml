@@ -452,6 +452,16 @@ Resources:
         ReadCapacityUnits: 2
         WriteCapacityUnits: 2
 
+  ProfilesTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: userSub
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
   CounterTable:
     Type: AWS::Serverless::SimpleTable
     Properties:
@@ -733,16 +743,13 @@ Resources:
             TableName: !Ref AdvisingRulesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentsTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ListUsers
-              Resource: !GetAtt CognitoAuthorizerUserPool.Arn
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProfilesTable
       Environment:
         Variables:
           ADVISING_RULES_TABLE: !Ref AdvisingRulesTable
           STUDENTS_TABLE: !Ref StudentsTable
-          COGNITO_USER_POOL_ID: !Ref CognitoAuthorizerUserPool
+          PROFILES_TABLE: !Ref ProfilesTable
       Events:
         GetAdvisor:
           Type: Api
@@ -1468,11 +1475,14 @@ Resources:
             TableName: !Ref StudentsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref CounterTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProfilesTable
         - Statement:
             - Effect: Allow
               Action:
                 - cognito-idp:AdminCreateUser
                 - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminGetUser
                 - cognito-idp:AdminAddUserToGroup
                 - cognito-idp:AdminSetUserPassword
                 - cognito-idp:AdminUpdateUserAttributes
@@ -1482,6 +1492,7 @@ Resources:
           COGNITO_USER_POOL_ID: !Ref CognitoAuthorizerUserPool
           STUDENTS_TABLE: !Ref StudentsTable
           COUNTER_TABLE: !Ref CounterTable
+          PROFILES_TABLE: !Ref ProfilesTable
       Events:
         BulkCreateUsers:
           Type: Api

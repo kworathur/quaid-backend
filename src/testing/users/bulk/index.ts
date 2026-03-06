@@ -8,12 +8,15 @@ import {
   AdminAddUserToGroupCommand,
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
+  AdminGetUserCommand,
   AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
+  type AttributeType,
   CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
+  DeleteCommand,
   DynamoDBDocumentClient,
   PutCommand,
   UpdateCommand,
@@ -29,6 +32,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
 const STUDENTS_TABLE = process.env.STUDENTS_TABLE!;
 const COUNTER_TABLE = process.env.COUNTER_TABLE!;
+const PROFILES_TABLE = process.env.PROFILES_TABLE!;
 
 const StudentSeed = z
   .object({
@@ -162,6 +166,29 @@ async function bulkCreateUsers(
         );
       }
 
+      const cognitoUser = await client.send(
+        new AdminGetUserCommand({
+          UserPoolId: USER_POOL_ID,
+          Username: user.username,
+        }),
+      );
+
+      const attrs = attributesToMap(cognitoUser.UserAttributes ?? []);
+      const userSub = attrs.sub;
+      if (!userSub) {
+        throw new Error('Created user missing sub attribute');
+      }
+
+      if (shouldStoreProfile(user.groups)) {
+        await upsertProfileRecord({
+          userSub,
+          username: user.username,
+          email: attrs.email ?? user.email ?? '',
+          name: attrs.name ?? deriveNameFromAttributes(attrs),
+          groups: user.groups ?? [],
+        });
+      }
+
       created.push(user.username);
     } catch (err: unknown) {
       console.error('Error creating user:', user.username, err);
@@ -227,6 +254,57 @@ async function upsertStudentRecord(
   return studentId;
 }
 
+async function upsertProfileRecord(input: {
+  userSub: string;
+  username: string;
+  email: string;
+  name: string;
+  groups: string[];
+}): Promise<void> {
+  const now = new Date().toISOString();
+  await ddb.send(
+    new PutCommand({
+      TableName: PROFILES_TABLE,
+      Item: {
+        userSub: input.userSub,
+        username: input.username,
+        email: input.email,
+        name: input.name,
+        roles: input.groups,
+        updatedAt: now,
+        createdAt: now,
+      },
+    }),
+  );
+}
+
+function attributesToMap(attributes: AttributeType[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const attr of attributes) {
+    if (attr.Name) {
+      out[attr.Name] = attr.Value ?? '';
+    }
+  }
+  return out;
+}
+
+function shouldStoreProfile(groups: string[] | undefined): boolean {
+  if (!groups || groups.length === 0) {
+    return false;
+  }
+  return groups.includes('advising-advisor') || groups.includes('advising-admin');
+}
+
+function deriveNameFromAttributes(attrs: Record<string, string>): string {
+  if (attrs.given_name || attrs.family_name) {
+    return `${attrs.given_name ?? ''} ${attrs.family_name ?? ''}`.trim();
+  }
+  if (attrs.email) {
+    return attrs.email.split('@')[0];
+  }
+  return '';
+}
+
 async function bulkDeleteUsers(
   rawBody: string | null,
 ): Promise<APIGatewayProxyResult> {
@@ -249,12 +327,44 @@ async function bulkDeleteUsers(
 
   for (const username of body.usernames) {
     try {
+      const user = await client.send(
+        new AdminGetUserCommand({
+          UserPoolId: USER_POOL_ID,
+          Username: username,
+        }),
+      );
+      const attrs = attributesToMap(user.UserAttributes ?? []);
+      const studentId = attrs['custom:studentId'];
+      const userSub = attrs.sub;
+
       await client.send(
         new AdminDeleteUserCommand({
           UserPoolId: USER_POOL_ID,
           Username: username,
         }),
       );
+
+      if (studentId) {
+        const parsed = parseInt(studentId, 10);
+        if (!Number.isNaN(parsed)) {
+          await ddb.send(
+            new DeleteCommand({
+              TableName: STUDENTS_TABLE,
+              Key: { id: parsed },
+            }),
+          );
+        }
+      }
+
+      if (userSub) {
+        await ddb.send(
+          new DeleteCommand({
+            TableName: PROFILES_TABLE,
+            Key: { userSub },
+          }),
+        );
+      }
+
       deleted.push(username);
     } catch (err: unknown) {
       console.error('Error deleting user:', username, err);
