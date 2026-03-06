@@ -29,6 +29,8 @@ tags:
     description: Advising appointments booking
   - name: advising_insights
     description: Insights to give students topics to discuss during advising
+  - name: testing
+    description: Utilities for integration and frontend testing
 paths:
   /students:
     get:
@@ -1383,6 +1385,80 @@ paths:
       description: seed degreeworks with initial degree data for insights
       operationId: seedDegreeWorks
 
+  /testing/users/bulk:
+    post:
+      tags:
+        - testing
+      description: bulk create Cognito users for automated frontend testing
+      operationId: bulkCreateTestUsers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkCreateUsersRequest'
+      responses:
+        '200':
+          description: all users created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkCreateUsersResponse'
+        '207':
+          description: partial success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkCreateUsersResponse'
+        '400':
+          description: invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - testing
+      description: bulk delete Cognito users for automated frontend testing
+      operationId: bulkDeleteTestUsers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteUsersRequest'
+      responses:
+        '200':
+          description: all users deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteUsersResponse'
+        '207':
+          description: partial success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteUsersResponse'
+        '400':
+          description: invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   schemas:
     # MockStudent is a placeholder for student data that will later be accessed via SIS
@@ -1987,6 +2063,140 @@ components:
         - data
         - insightId
         - studentId
+
+    BulkTestUser:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        temporaryPassword:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+        student:
+          $ref: '#/components/schemas/BulkStudentSeed'
+      required:
+        - username
+
+    BulkStudentSeed:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        address:
+          type: string
+        birthdate:
+          type: string
+        level_of_study:
+          type: string
+          enum:
+            - BACHELORS
+            - MASTERS
+            - DOCTORAL
+        verificationStatus:
+          type: string
+          enum:
+            - UNVERIFIED
+            - VERIFIED
+            - NEEDS_REVIEW
+            - FRAUDULENT
+        consented:
+          type: boolean
+      required:
+        - email
+        - address
+        - birthdate
+        - level_of_study
+        - name
+
+    BulkCreateUsersRequest:
+      type: object
+      properties:
+        users:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BulkTestUser'
+      required:
+        - users
+
+    BulkDeleteUsersRequest:
+      type: object
+      properties:
+        usernames:
+          type: array
+          minItems: 1
+          items:
+            type: string
+      required:
+        - usernames
+
+    BulkCreateUsersResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        created:
+          type: array
+          items:
+            type: string
+        failed:
+          type: array
+          items:
+            type: object
+            properties:
+              username:
+                type: string
+              error:
+                type: string
+            required:
+              - username
+              - error
+      required:
+        - message
+        - created
+        - failed
+
+    BulkDeleteUsersResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        deleted:
+          type: array
+          items:
+            type: string
+        failed:
+          type: array
+          items:
+            type: object
+            properties:
+              username:
+                type: string
+              error:
+                type: string
+            required:
+              - username
+              - error
+      required:
+        - message
+        - deleted
+        - failed
 
     AdvisingSlot:
       type: object

@@ -135,6 +135,7 @@ Resources:
           MyCognitoAuth:
             UserPoolArn: !GetAtt CognitoAuthorizerUserPool.Arn
             AuthorizationScopes:
+              - com.apigw/scope1
               - com.apigw/advising.student
               - com.apigw/advising.advisor
               - com.apigw/advising.admin
@@ -1442,6 +1443,64 @@ Resources:
               Authorizer: MyCognitoAuth
               AuthorizationScopes:
                 - com.apigw/advising.admin
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - index.ts
+        Minify: true
+        Target: 'es2020'
+        Sourcemap: true
+
+  bulkTestUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/testing/users/bulk/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Description: Bulk create/delete Cognito users for automated frontend tests.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CounterTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !GetAtt CognitoAuthorizerUserPool.Arn
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoAuthorizerUserPool
+          STUDENTS_TABLE: !Ref StudentsTable
+          COUNTER_TABLE: !Ref CounterTable
+      Events:
+        BulkCreateUsers:
+          Type: Api
+          Properties:
+            Path: /testing/users/bulk
+            Method: POST
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/scope1
+        BulkDeleteUsers:
+          Type: Api
+          Properties:
+            Path: /testing/users/bulk
+            Method: DELETE
+            RestApiId: !Ref BackgroundChecksAPI
+            Auth:
+              Authorizer: MyCognitoAuth
+              AuthorizationScopes:
+                - com.apigw/scope1
     Metadata:
       BuildMethod: esbuild
       BuildProperties:

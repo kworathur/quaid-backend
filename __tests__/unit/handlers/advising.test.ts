@@ -1,5 +1,12 @@
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { CognitoIdentityProviderClient, ListUsersInGroupCommand, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider';
+import {
+  AdminAddUserToGroupCommand,
+  AdminCreateUserCommand,
+  AdminDeleteUserCommand,
+  CognitoIdentityProviderClient,
+  ListUsersInGroupCommand,
+  ListUsersCommand,
+} from '@aws-sdk/client-cognito-identity-provider';
 import { RDSDataClient, ExecuteStatementCommand } from '@aws-sdk/client-rds-data';
 import { mockClient } from 'aws-sdk-client-mock';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
@@ -25,6 +32,7 @@ import { handler as sessionsHandler } from '../../../src/advising/sessions/index
 import { handler as rulesHandler } from '../../../src/advising/admin/rules/index';
 import { handler as executeInsightHandler } from '../../../src/advising/insights/_insightId/execute/index';
 import { handler as advisorsHandler } from '../../../src/advising/admin/advisors/index';
+import { handler as bulkTestUsersHandler } from '../../../src/testing/users/bulk/index';
 
 const ddbMock = mockClient(DynamoDBDocumentClient);
 const rdsMock = mockClient(RDSDataClient);
@@ -415,6 +423,167 @@ describe('Bookings endpoint supports both student and advisor queries', () => {
 
     const body = JSON.parse(result.body);
     expect(body.error.code).toEqual('FORBIDDEN');
+  });
+});
+
+describe('Bulk test users endpoint', () => {
+  it('should bulk create users and add groups', async () => {
+    cognitoMock.on(AdminCreateUserCommand).resolves({});
+    cognitoMock.on(AdminAddUserToGroupCommand).resolves({});
+
+    const event = createEvent({
+      httpMethod: 'POST',
+      path: '/testing/users/bulk',
+      body: JSON.stringify({
+        users: [
+          {
+            username: 'pw-e2e-student-1',
+            email: 'pw-e2e-student-1@example.com',
+            temporaryPassword: 'TempPass123!',
+            groups: ['advising-student'],
+          },
+          {
+            username: 'pw-e2e-advisor-1',
+            email: 'pw-e2e-advisor-1@example.com',
+            temporaryPassword: 'TempPass123!',
+            groups: ['advising-advisor'],
+          },
+        ],
+      }),
+    });
+
+    const result = await bulkTestUsersHandler(event);
+    expect(result.statusCode).toEqual(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.created).toEqual(['pw-e2e-student-1', 'pw-e2e-advisor-1']);
+    expect(body.failed).toEqual([]);
+  });
+
+  it('should return 207 when one create fails', async () => {
+    cognitoMock
+      .on(AdminCreateUserCommand)
+      .resolvesOnce({})
+      .rejectsOnce(new Error('User already exists'));
+    cognitoMock.on(AdminAddUserToGroupCommand).resolves({});
+
+    const event = createEvent({
+      httpMethod: 'POST',
+      path: '/testing/users/bulk',
+      body: JSON.stringify({
+        users: [
+          { username: 'pw-e2e-ok', groups: ['advising-student'] },
+          { username: 'pw-e2e-existing', groups: ['advising-student'] },
+        ],
+      }),
+    });
+
+    const result = await bulkTestUsersHandler(event);
+    expect(result.statusCode).toEqual(207);
+
+    const body = JSON.parse(result.body);
+    expect(body.created).toEqual(['pw-e2e-ok']);
+    expect(body.failed).toHaveLength(1);
+    expect(body.failed[0].username).toEqual('pw-e2e-existing');
+  });
+
+  it('should store student payload when it matches StudentsTable schema', async () => {
+    cognitoMock.on(AdminCreateUserCommand).resolves({});
+    ddbMock.on(UpdateCommand).resolves({ Attributes: { count: 1001 } });
+    ddbMock.on(PutCommand).resolves({});
+
+    const event = createEvent({
+      httpMethod: 'POST',
+      path: '/testing/users/bulk',
+      body: JSON.stringify({
+        users: [
+          {
+            username: 'pw-e2e-student-extra',
+            email: 'pw-e2e-student-extra@example.com',
+            student: {
+              name: 'Playwright Student',
+              email: 'pw-e2e-student-extra@example.com',
+              address: '123 Main St, Atlanta, GA 30301',
+              birthdate: '2001-08-20',
+              level_of_study: 'BACHELORS',
+              ssn: '123456789',
+            },
+          },
+        ],
+      }),
+    });
+
+    const result = await bulkTestUsersHandler(event);
+    expect(result.statusCode).toEqual(200);
+
+    const putCalls = ddbMock.commandCalls(PutCommand);
+    expect(putCalls).toHaveLength(1);
+    const putInput = putCalls[0].args[0].input as { Item: Record<string, unknown> };
+    expect(putInput.Item.id).toEqual(1001);
+    expect(putInput.Item.name).toEqual('Playwright Student');
+    expect(putInput.Item.level_of_study).toEqual('BACHELORS');
+    expect(putInput.Item.ssn).toEqual('123456789');
+  });
+
+  it('should reject student payload with properties outside StudentsTable schema', async () => {
+    const event = createEvent({
+      httpMethod: 'POST',
+      path: '/testing/users/bulk',
+      body: JSON.stringify({
+        users: [
+          {
+            username: 'pw-e2e-student-invalid',
+            student: {
+              name: 'Invalid Student',
+              email: 'invalid@example.com',
+              address: '123 Main St, Atlanta, GA 30301',
+              birthdate: '2001-08-20',
+              level_of_study: 'BACHELORS',
+              cohort: 'SPRING_2026',
+            },
+          },
+        ],
+      }),
+    });
+
+    const result = await bulkTestUsersHandler(event);
+    expect(result.statusCode).toEqual(400);
+
+    const body = JSON.parse(result.body);
+    expect(body.error.code).toEqual('BAD_REQUEST');
+  });
+
+  it('should bulk delete users', async () => {
+    cognitoMock.on(AdminDeleteUserCommand).resolves({});
+
+    const event = createEvent({
+      httpMethod: 'DELETE',
+      path: '/testing/users/bulk',
+      body: JSON.stringify({
+        usernames: ['pw-e2e-student-1', 'pw-e2e-advisor-1'],
+      }),
+    });
+
+    const result = await bulkTestUsersHandler(event);
+    expect(result.statusCode).toEqual(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.deleted).toEqual(['pw-e2e-student-1', 'pw-e2e-advisor-1']);
+    expect(body.failed).toEqual([]);
+  });
+
+  it('should return 400 for invalid bulk delete payload', async () => {
+    const event = createEvent({
+      httpMethod: 'DELETE',
+      path: '/testing/users/bulk',
+      body: JSON.stringify({ usernames: [] }),
+    });
+
+    const result = await bulkTestUsersHandler(event);
+    expect(result.statusCode).toEqual(400);
+
+    const body = JSON.parse(result.body);
+    expect(body.error.code).toEqual('BAD_REQUEST');
   });
 });
 
