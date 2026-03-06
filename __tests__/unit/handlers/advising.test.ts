@@ -4,6 +4,7 @@ import {
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
   AdminSetUserPasswordCommand,
+  AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
   ListUsersInGroupCommand,
   ListUsersCommand,
@@ -501,6 +502,7 @@ describe('Bulk test users endpoint', () => {
 
   it('should store student payload when it matches StudentsTable schema', async () => {
     cognitoMock.on(AdminCreateUserCommand).resolves({});
+    cognitoMock.on(AdminUpdateUserAttributesCommand).resolves({});
     ddbMock.on(UpdateCommand).resolves({ Attributes: { count: 1001 } });
     ddbMock.on(PutCommand).resolves({});
 
@@ -535,6 +537,15 @@ describe('Bulk test users endpoint', () => {
     expect(putInput.Item.name).toEqual('Playwright Student');
     expect(putInput.Item.level_of_study).toEqual('BACHELORS');
     expect(putInput.Item.ssn).toEqual('123456789');
+
+    const updateAttrCalls = cognitoMock.commandCalls(
+      AdminUpdateUserAttributesCommand,
+    );
+    expect(updateAttrCalls).toHaveLength(1);
+    expect(updateAttrCalls[0].args[0].input).toMatchObject({
+      Username: 'pw-e2e-student-extra',
+      UserAttributes: [{ Name: 'custom:studentId', Value: '1001' }],
+    });
   });
 
   it('should reject student payload with properties outside StudentsTable schema', async () => {

@@ -9,6 +9,7 @@ import {
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
   AdminSetUserPasswordCommand,
+  AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -146,7 +147,19 @@ async function bulkCreateUsers(
       }
 
       if (user.student) {
-        await upsertStudentRecord(user.student);
+        const studentId = await upsertStudentRecord(user.student);
+        await client.send(
+          new AdminUpdateUserAttributesCommand({
+            UserPoolId: USER_POOL_ID,
+            Username: user.username,
+            UserAttributes: [
+              {
+                Name: 'custom:studentId',
+                Value: String(studentId),
+              },
+            ],
+          }),
+        );
       }
 
       created.push(user.username);
@@ -194,7 +207,7 @@ async function nextStudentId(): Promise<number> {
 
 async function upsertStudentRecord(
   student: z.infer<typeof StudentSeed>,
-): Promise<void> {
+): Promise<number> {
   const studentId = student.id ?? (await nextStudentId());
 
   const item = {
@@ -210,6 +223,8 @@ async function upsertStudentRecord(
       Item: item,
     }),
   );
+
+  return studentId;
 }
 
 async function bulkDeleteUsers(

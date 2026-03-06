@@ -1475,6 +1475,7 @@ Resources:
                 - cognito-idp:AdminDeleteUser
                 - cognito-idp:AdminAddUserToGroup
                 - cognito-idp:AdminSetUserPassword
+                - cognito-idp:AdminUpdateUserAttributes
               Resource: !GetAtt CognitoAuthorizerUserPool.Arn
       Environment:
         Variables:
