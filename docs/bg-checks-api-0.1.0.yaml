@@ -1045,7 +1045,7 @@ paths:
     get:
       tags:
         - advising
-      description: list a student's booked advising sessions
+      description: list booked advising sessions for the current student or current advisor
       operationId: getBookings
       responses:
         '200':
@@ -1074,6 +1074,12 @@ paths:
                 $ref: '#/components/schemas/BookingCreatedResponse'
         '400':
           description: invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: forbidden - only students can create bookings
           content:
             application/json:
               schema:
@@ -1331,6 +1337,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListSessionsResponse'
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /advising/students:
+    get:
+      tags:
+        - advising
+      description: list all students assigned to the current advisor using active rules in ascending priority order
+      operationId: listAdvisorStudents
+      responses:
+        '200':
+          description: list of students assigned to the current advisor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAdvisorStudentsResponse'
         '401':
           description: unauthorized
           content:
@@ -1837,6 +1869,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdvisingSlot'
+      required:
+        - data
+
+    ListAdvisorStudentsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MockStudent'
       required:
         - data
 

@@ -20,6 +20,7 @@ import { handler as configHandler } from '../../../src/advising/admin/config/ind
 import { handler as bookingsHandler } from '../../../src/advising/bookings/index';
 import { handler as cancelBookingHandler } from '../../../src/advising/bookings/_bookingId/index';
 import { handler as advisorHandler } from '../../../src/advising/advisor/index';
+import { handler as advisorStudentsHandler } from '../../../src/advising/students/index';
 import { handler as sessionsHandler } from '../../../src/advising/sessions/index';
 import { handler as rulesHandler } from '../../../src/advising/admin/rules/index';
 import { handler as executeInsightHandler } from '../../../src/advising/insights/_insightId/execute/index';
@@ -199,6 +200,121 @@ describe('Student can book an advising session only with their assigned advisor'
   });
 });
 
+// ── 2b. Advisor can list assigned students ───────────────────────────────────
+
+describe('Advisor can list assigned students by rule priority', () => {
+  it('should return 401 when advisor claim is missing', async () => {
+    const event = createEvent({
+      httpMethod: 'GET',
+    });
+
+    const result = await advisorStudentsHandler(event);
+    expect(result.statusCode).toEqual(401);
+
+    const body = JSON.parse(result.body);
+    expect(body.error.code).toEqual('UNAUTHORIZED');
+  });
+
+  it('should return only students assigned to the current advisor with priority ordering', async () => {
+    ddbMock
+      .on(ScanCommand)
+      .resolvesOnce({
+        Items: [
+          {
+            ruleId: 'rule-low-priority',
+            advisorId: 'advisor-uuid-2',
+            conditionType: 'LAST_NAME_RANGE',
+            parameters: { start: 'A', end: 'Z' },
+            priority: 10,
+            isActive: true,
+          },
+        ],
+        LastEvaluatedKey: { ruleId: 'rule-low-priority' },
+      })
+      .resolvesOnce({
+        Items: [
+          {
+            ruleId: 'rule-high-priority',
+            advisorId: 'advisor-uuid-1',
+            conditionType: 'LAST_NAME_RANGE',
+            parameters: { start: 'M', end: 'Z' },
+            priority: 1,
+            isActive: true,
+          },
+        ],
+      })
+      .resolvesOnce({
+        Items: [
+          { id: 1, name: 'Jane Martinez' },
+          { id: 2, name: 'Bob Anderson' },
+        ],
+        LastEvaluatedKey: { id: 2 },
+      })
+      .resolvesOnce({
+        Items: [
+          { id: 3, name: 'Maria Young' },
+          { id: 4 },
+        ],
+      });
+
+    const event = createEvent({
+      httpMethod: 'GET',
+      ...withAdvisorClaims('advisor-uuid-1'),
+    });
+
+    const result = await advisorStudentsHandler(event);
+    expect(result.statusCode).toEqual(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((s: { id: number }) => s.id)).toEqual([1, 3]);
+  });
+
+  it('should return 500 when rules lookup fails', async () => {
+    ddbMock.on(ScanCommand).rejectsOnce(new Error('rules scan failed'));
+
+    const event = createEvent({
+      httpMethod: 'GET',
+      ...withAdvisorClaims('advisor-uuid-1'),
+    });
+
+    const result = await advisorStudentsHandler(event);
+    expect(result.statusCode).toEqual(500);
+
+    const body = JSON.parse(result.body);
+    expect(body.error.code).toEqual('INTERNAL_SERVER_ERROR');
+  });
+
+  it('should return 500 when students lookup fails', async () => {
+    ddbMock
+      .on(ScanCommand)
+      .resolvesOnce({
+        Items: [
+          {
+            ruleId: 'rule-1',
+            advisorId: 'advisor-uuid-1',
+            conditionType: 'LAST_NAME_RANGE',
+            parameters: { start: 'A', end: 'Z' },
+            priority: 1,
+            isActive: true,
+          },
+        ],
+      })
+      .rejectsOnce(new Error('students scan failed'));
+
+    const event = createEvent({
+      httpMethod: 'GET',
+      ...withAdvisorClaims('advisor-uuid-1'),
+    });
+
+    const result = await advisorStudentsHandler(event);
+    expect(result.statusCode).toEqual(500);
+
+    const body = JSON.parse(result.body);
+    expect(body.error.code).toEqual('INTERNAL_SERVER_ERROR');
+  });
+});
+
 // ── 3. Students cannot book more than one advising session at a time ─────────
 
 describe('Students cannot book more than one advising session at a time', () => {
@@ -257,6 +373,48 @@ describe('Students cannot book more than one advising session at a time', () => 
 
     const body = JSON.parse(result.body);
     expect(body.message).toEqual('Booking created');
+  });
+});
+
+describe('Bookings endpoint supports both student and advisor queries', () => {
+  it('should allow advisor to list their booked sessions via GET /advising/bookings', async () => {
+    ddbMock.on(QueryCommand).resolves({
+      Items: [
+        {
+          slotId: SLOT_UUID_1,
+          advisorId: 'advisor-uuid-1',
+          studentId: 42,
+          status: 'BOOKED',
+          slotDateTime: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const event = createEvent({
+      httpMethod: 'GET',
+      ...withAdvisorClaims('advisor-uuid-1'),
+    });
+
+    const result = await bookingsHandler(event);
+    expect(result.statusCode).toEqual(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].advisorId).toEqual('advisor-uuid-1');
+  });
+
+  it('should reject advisor POST /advising/bookings with 403', async () => {
+    const event = createEvent({
+      httpMethod: 'POST',
+      body: JSON.stringify({ slotId: SLOT_UUID_1 }),
+      ...withAdvisorClaims('advisor-uuid-1'),
+    });
+
+    const result = await bookingsHandler(event);
+    expect(result.statusCode).toEqual(403);
+
+    const body = JSON.parse(result.body);
+    expect(body.error.code).toEqual('FORBIDDEN');
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * POST /advising/bookings  — book a slot
- * GET  /advising/bookings  — list student's booked sessions
- * Scope: com.apigw/advising.student
+ * GET  /advising/bookings  — list student's or advisor's booked sessions
+ * Scope: com.apigw/advising.student OR com.apigw/advising.advisor
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -36,18 +36,37 @@ export const handler = async (
     event.requestContext?.authorizer?.claims,
   );
 
-  const studentIdClaim =
-    event.requestContext?.authorizer?.claims?.['custom:studentId'];
-  if (!studentIdClaim) {
-    return errorResponse(400, 'BAD_REQUEST', 'Missing custom:studentId claim');
-  }
-  const studentId = parseInt(studentIdClaim, 10);
-
   switch (event.httpMethod) {
-    case 'GET':
-      return listBookings(studentId);
-    case 'POST':
-      return createBooking(studentId, event.body);
+    case 'GET': {
+      const studentIdClaim =
+        event.requestContext?.authorizer?.claims?.['custom:studentId'];
+      if (studentIdClaim) {
+        return listStudentBookings(parseInt(studentIdClaim, 10));
+      }
+
+      const advisorId = event.requestContext?.authorizer?.claims?.sub;
+      if (advisorId) {
+        return listAdvisorBookings(advisorId);
+      }
+
+      return errorResponse(
+        400,
+        'BAD_REQUEST',
+        'Missing custom:studentId or sub claim',
+      );
+    }
+    case 'POST': {
+      const studentIdClaim =
+        event.requestContext?.authorizer?.claims?.['custom:studentId'];
+      if (!studentIdClaim) {
+        return errorResponse(
+          403,
+          'FORBIDDEN',
+          'Only students can create bookings',
+        );
+      }
+      return createBooking(parseInt(studentIdClaim, 10), event.body);
+    }
     default:
       return errorResponse(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
   }
@@ -179,7 +198,9 @@ async function createBooking(
   };
 }
 
-async function listBookings(studentId: number): Promise<APIGatewayProxyResult> {
+async function listStudentBookings(
+  studentId: number,
+): Promise<APIGatewayProxyResult> {
   try {
     const result = await ddb.send(
       new QueryCommand({
@@ -201,6 +222,34 @@ async function listBookings(studentId: number): Promise<APIGatewayProxyResult> {
     };
   } catch (err) {
     console.error('Error listing bookings:', err);
+    return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
+  }
+}
+
+async function listAdvisorBookings(
+  advisorId: string,
+): Promise<APIGatewayProxyResult> {
+  try {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: SLOTS_TABLE,
+        IndexName: 'advisorId-slotDateTime-index',
+        KeyConditionExpression: 'advisorId = :aid',
+        FilterExpression: '#st = :booked',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: {
+          ':aid': advisorId,
+          ':booked': 'BOOKED',
+        },
+      }),
+    );
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ data: result.Items ?? [] }),
+    };
+  } catch (err) {
+    console.error('Error listing advisor bookings:', err);
     return errorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
   }
 }
