@@ -3,6 +3,7 @@ import {
   AdminAddUserToGroupCommand,
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
+  AdminSetUserPasswordCommand,
   CognitoIdentityProviderClient,
   ListUsersInGroupCommand,
   ListUsersCommand,
@@ -33,6 +34,7 @@ import { handler as rulesHandler } from '../../../src/advising/admin/rules/index
 import { handler as executeInsightHandler } from '../../../src/advising/insights/_insightId/execute/index';
 import { handler as advisorsHandler } from '../../../src/advising/admin/advisors/index';
 import { handler as bulkTestUsersHandler } from '../../../src/testing/users/bulk/index';
+import { handler as bulkDegreeWorksRowsHandler } from '../../../src/testing/degreeworks/index';
 
 const ddbMock = mockClient(DynamoDBDocumentClient);
 const rdsMock = mockClient(RDSDataClient);
@@ -429,6 +431,7 @@ describe('Bookings endpoint supports both student and advisor queries', () => {
 describe('Bulk test users endpoint', () => {
   it('should bulk create users and add groups', async () => {
     cognitoMock.on(AdminCreateUserCommand).resolves({});
+    cognitoMock.on(AdminSetUserPasswordCommand).resolves({});
     cognitoMock.on(AdminAddUserToGroupCommand).resolves({});
 
     const event = createEvent({
@@ -458,6 +461,14 @@ describe('Bulk test users endpoint', () => {
     const body = JSON.parse(result.body);
     expect(body.created).toEqual(['pw-e2e-student-1', 'pw-e2e-advisor-1']);
     expect(body.failed).toEqual([]);
+
+    const setPasswordCalls = cognitoMock.commandCalls(AdminSetUserPasswordCommand);
+    expect(setPasswordCalls).toHaveLength(2);
+    expect(setPasswordCalls[0].args[0].input).toMatchObject({
+      Username: 'pw-e2e-student-1',
+      Password: 'TempPass123!',
+      Permanent: true,
+    });
   });
 
   it('should return 207 when one create fails', async () => {
@@ -465,6 +476,7 @@ describe('Bulk test users endpoint', () => {
       .on(AdminCreateUserCommand)
       .resolvesOnce({})
       .rejectsOnce(new Error('User already exists'));
+    cognitoMock.on(AdminSetUserPasswordCommand).resolves({});
     cognitoMock.on(AdminAddUserToGroupCommand).resolves({});
 
     const event = createEvent({
@@ -982,5 +994,101 @@ describe('Advisor can cancel all upcoming bookings', () => {
 
     const result = await cancelBookingHandler(event);
     expect(result.statusCode).toEqual(403);
+  });
+});
+
+// ── 8. Test endpoint can seed/reset DegreeWorks rows ─────────────────────────
+
+describe('Testing endpoint can insert/update/delete DegreeWorks rows', () => {
+  it('should insert rows with POST /testing/degreeworks/rows', async () => {
+    rdsMock.on(ExecuteStatementCommand).resolves({});
+
+    const event = createEvent({
+      httpMethod: 'POST',
+      path: '/testing/degreeworks/rows',
+      body: JSON.stringify({
+        table: 'student_gpa',
+        rows: [
+          {
+            student_id: 99,
+            term_code: '202601',
+            gpa: 3.75,
+            total_credits_attempted: 120,
+            total_credits_earned: 117,
+          },
+        ],
+      }),
+    });
+
+    const result = await bulkDegreeWorksRowsHandler(event);
+    expect(result.statusCode).toEqual(200);
+    const body = JSON.parse(result.body);
+    expect(body.inserted).toEqual(1);
+
+    expect(rdsMock.calls()).toHaveLength(1);
+    expect(rdsMock.calls()[0].args[0].input.sql).toContain('INSERT INTO "student_gpa"');
+  });
+
+  it('should update rows with PUT /testing/degreeworks/rows', async () => {
+    rdsMock.on(ExecuteStatementCommand).resolves({});
+
+    const event = createEvent({
+      httpMethod: 'PUT',
+      path: '/testing/degreeworks/rows',
+      body: JSON.stringify({
+        table: 'student_gpa',
+        updates: [
+          {
+            match: { student_id: 99, term_code: '202601' },
+            set: { gpa: 3.95 },
+          },
+        ],
+      }),
+    });
+
+    const result = await bulkDegreeWorksRowsHandler(event);
+    expect(result.statusCode).toEqual(200);
+    const body = JSON.parse(result.body);
+    expect(body.updated).toEqual(1);
+
+    expect(rdsMock.calls()).toHaveLength(1);
+    expect(rdsMock.calls()[0].args[0].input.sql).toContain('UPDATE "student_gpa" SET');
+  });
+
+  it('should delete rows with DELETE /testing/degreeworks/rows', async () => {
+    rdsMock.on(ExecuteStatementCommand).resolves({});
+
+    const event = createEvent({
+      httpMethod: 'DELETE',
+      path: '/testing/degreeworks/rows',
+      body: JSON.stringify({
+        table: 'student_gpa',
+        where: [{ student_id: 99, term_code: '202601' }],
+      }),
+    });
+
+    const result = await bulkDegreeWorksRowsHandler(event);
+    expect(result.statusCode).toEqual(200);
+    const body = JSON.parse(result.body);
+    expect(body.deleted).toEqual(1);
+
+    expect(rdsMock.calls()).toHaveLength(1);
+    expect(rdsMock.calls()[0].args[0].input.sql).toContain('DELETE FROM "student_gpa"');
+  });
+
+  it('should reject unknown columns', async () => {
+    const event = createEvent({
+      httpMethod: 'POST',
+      path: '/testing/degreeworks/rows',
+      body: JSON.stringify({
+        table: 'student_gpa',
+        rows: [{ fake_column: 'nope' }],
+      }),
+    });
+
+    const result = await bulkDegreeWorksRowsHandler(event);
+    expect(result.statusCode).toEqual(400);
+    const body = JSON.parse(result.body);
+    expect(body.error.code).toEqual('BAD_REQUEST');
   });
 });

@@ -1397,6 +1397,27 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkCreateUsersRequest'
+            examples:
+              createUsersWithStudentSeed:
+                value:
+                  users:
+                    - username: pw-e2e-student-1
+                      email: pw-e2e-student-1@example.com
+                      temporaryPassword: TempPass123!
+                      groups:
+                        - advising-student
+                      student:
+                        name: Jane Doe
+                        email: pw-e2e-student-1@example.com
+                        address: 101 Test Ave, Atlanta, GA 30332
+                        birthdate: '2003-05-13'
+                        level_of_study: BACHELORS
+                        consented: true
+                    - username: pw-e2e-advisor-1
+                      email: pw-e2e-advisor-1@example.com
+                      temporaryPassword: TempPass123!
+                      groups:
+                        - advising-advisor
       responses:
         '200':
           description: all users created successfully
@@ -1404,12 +1425,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkCreateUsersResponse'
+              examples:
+                allCreated:
+                  value:
+                    message: Bulk user create completed
+                    created:
+                      - pw-e2e-student-1
+                      - pw-e2e-advisor-1
+                    failed: []
         '207':
           description: partial success
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkCreateUsersResponse'
+              examples:
+                partialCreate:
+                  value:
+                    message: Bulk user create completed
+                    created:
+                      - pw-e2e-student-1
+                    failed:
+                      - username: pw-e2e-advisor-1
+                        error: User already exists
         '400':
           description: invalid request body
           content:
@@ -1433,6 +1471,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkDeleteUsersRequest'
+            examples:
+              deleteUsers:
+                value:
+                  usernames:
+                    - pw-e2e-student-1
+                    - pw-e2e-advisor-1
       responses:
         '200':
           description: all users deleted successfully
@@ -1440,14 +1484,179 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkDeleteUsersResponse'
+              examples:
+                allDeleted:
+                  value:
+                    message: Bulk user delete completed
+                    deleted:
+                      - pw-e2e-student-1
+                      - pw-e2e-advisor-1
+                    failed: []
         '207':
           description: partial success
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkDeleteUsersResponse'
+              examples:
+                partialDelete:
+                  value:
+                    message: Bulk user delete completed
+                    deleted:
+                      - pw-e2e-student-1
+                    failed:
+                      - username: pw-e2e-advisor-1
+                        error: User not found
         '400':
           description: invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /testing/degreeworks/rows:
+    post:
+      tags:
+        - testing
+      description: insert one or more rows into an allowlisted DegreeWorks table for automated frontend testing
+      operationId: bulkInsertDegreeWorksRows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkInsertDegreeWorksRowsRequest'
+            examples:
+              insertStudentGpa:
+                value:
+                  table: student_gpa
+                  rows:
+                    - student_id: 99
+                      term_code: '202601'
+                      gpa: 3.75
+                      total_credits_attempted: 120
+                      total_credits_earned: 117
+      responses:
+        '200':
+          description: all rows inserted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDegreeWorksRowsResponse'
+              examples:
+                inserted:
+                  value:
+                    message: DegreeWorks rows inserted
+                    table: student_gpa
+                    inserted: 1
+        '400':
+          description: invalid request body or invalid columns for the selected table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidColumn:
+                  value:
+                    status: error
+                    statusCode: 400
+                    error:
+                      code: BAD_REQUEST
+                      message: Invalid columns for table student_gpa
+                      details:
+                        invalidColumns:
+                          - fake_column
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+        - testing
+      description: update one or more rows in an allowlisted DegreeWorks table for automated frontend testing
+      operationId: bulkUpdateDegreeWorksRows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkUpdateDegreeWorksRowsRequest'
+            examples:
+              updateStudentGpa:
+                value:
+                  table: student_gpa
+                  updates:
+                    - match:
+                        student_id: 99
+                        term_code: '202601'
+                      set:
+                        gpa: 3.95
+      responses:
+        '200':
+          description: all updates applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDegreeWorksRowsResponse'
+              examples:
+                updated:
+                  value:
+                    message: DegreeWorks rows updated
+                    table: student_gpa
+                    updated: 1
+        '400':
+          description: invalid request body or invalid columns for the selected table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - testing
+      description: delete one or more rows in an allowlisted DegreeWorks table for automated frontend testing
+      operationId: bulkDeleteDegreeWorksRows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteDegreeWorksRowsRequest'
+            examples:
+              deleteStudentGpa:
+                value:
+                  table: student_gpa
+                  where:
+                    - student_id: 99
+                      term_code: '202601'
+      responses:
+        '200':
+          description: all deletes applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDegreeWorksRowsResponse'
+              examples:
+                deleted:
+                  value:
+                    message: DegreeWorks rows deleted
+                    table: student_gpa
+                    deleted: 1
+        '400':
+          description: invalid request body or invalid columns for the selected table
           content:
             application/json:
               schema:
@@ -2198,6 +2407,104 @@ components:
         - deleted
         - failed
 
+    DegreeWorksTableName:
+      type: string
+      enum:
+        - programs
+        - courses
+        - course_attributes
+        - degree_requirements
+        - student_programs
+        - student_courses
+        - student_gpa
+        - scholarships
+        - scholarship_rules
+        - student_scholarships
+        - student_attendance
+
+    DegreeWorksColumnValue:
+      oneOf:
+        - type: string
+        - type: number
+        - type: boolean
+        - type: 'null'
+
+    DegreeWorksRowRecord:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/DegreeWorksColumnValue'
+      minProperties: 1
+
+    DegreeWorksUpdateInstruction:
+      type: object
+      properties:
+        match:
+          $ref: '#/components/schemas/DegreeWorksRowRecord'
+        set:
+          $ref: '#/components/schemas/DegreeWorksRowRecord'
+      required:
+        - match
+        - set
+
+    BulkInsertDegreeWorksRowsRequest:
+      type: object
+      properties:
+        table:
+          $ref: '#/components/schemas/DegreeWorksTableName'
+        rows:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/DegreeWorksRowRecord'
+      required:
+        - table
+        - rows
+
+    BulkUpdateDegreeWorksRowsRequest:
+      type: object
+      properties:
+        table:
+          $ref: '#/components/schemas/DegreeWorksTableName'
+        updates:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/DegreeWorksUpdateInstruction'
+      required:
+        - table
+        - updates
+
+    BulkDeleteDegreeWorksRowsRequest:
+      type: object
+      properties:
+        table:
+          $ref: '#/components/schemas/DegreeWorksTableName'
+        where:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/DegreeWorksRowRecord'
+      required:
+        - table
+        - where
+
+    BulkDegreeWorksRowsResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        table:
+          $ref: '#/components/schemas/DegreeWorksTableName'
+        inserted:
+          type: integer
+        updated:
+          type: integer
+        deleted:
+          type: integer
+      required:
+        - message
+        - table
+
     AdvisingSlot:
       type: object
       properties:
@@ -2272,6 +2579,7 @@ components:
           authorizationUrl: https://user-pool-domain-705948898164.auth.us-east-1.amazoncognito.com/oauth2/authorize
           tokenUrl: https://user-pool-domain-705948898164.auth.us-east-1.amazoncognito.com/oauth2/token
           scopes:
+            'com.apigw/scope1': machine-to-machine scope for test utilities
             'com.apigw/advising.student': student that can book advising appointments
             'com.apigw/advising.advisor': advisor that can indicate availability for appointments
             'com.apigw/advising.admin': administrator that can control advising insights and availability

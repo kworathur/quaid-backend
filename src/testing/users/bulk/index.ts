@@ -8,6 +8,7 @@ import {
   AdminAddUserToGroupCommand,
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
+  AdminSetUserPasswordCommand,
   CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -120,6 +121,19 @@ async function bulkCreateUsers(
           UserAttributes: userAttributes,
         }),
       );
+
+      // Convert temp credentials into a permanent password so test users can
+      // sign in directly without FORCE_CHANGE_PASSWORD challenge.
+      if (user.temporaryPassword) {
+        await client.send(
+          new AdminSetUserPasswordCommand({
+            UserPoolId: USER_POOL_ID,
+            Username: user.username,
+            Password: user.temporaryPassword,
+            Permanent: true,
+          }),
+        );
+      }
 
       for (const group of user.groups ?? []) {
         await client.send(
