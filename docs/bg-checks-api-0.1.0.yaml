@@ -950,6 +950,19 @@ paths:
         - advising
       description: bulk create or replace advisor availability slots for a given week
       operationId: createAdvisorAvailability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAvailabilityRequest'
+            example:
+              slots:
+                - slotDateTime: '2026-03-09T13:00:00Z'
+                  advisorDisplayName: 'Dr. Maya Patel'
+                - slotDateTime: '2026-03-10T15:30:00Z'
+                - slotDateTime: '2026-03-11T17:00:00Z'
+                  advisorDisplayName: 'Dr. Maya Patel'
       parameters:
         - name: weekStartDate
           in: path
@@ -1851,6 +1864,24 @@ components:
       required:
         - message
         - slotIds
+
+    UpdateAvailabilityRequest:
+      type: object
+      properties:
+        slots:
+          type: array
+          items:
+            type: object
+            properties:
+              slotDateTime:
+                type: string
+                format: date-time
+              advisorDisplayName:
+                type: string
+            required:
+              - slotDateTime
+      required:
+        - slots
 
     InsightCreatedResponse:
       type: object

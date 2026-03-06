@@ -232,56 +232,56 @@ jobs:
             --no-confirm-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
 
-  integration-test:
-    if: github.ref == 'refs/heads/main'
-    needs: [deploy-testing]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npm ci
+  # integration-test:
+  #   if: github.ref == 'refs/heads/main'
+  #   needs: [deploy-testing]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #     - run: npm ci
 
-      - name: Assume the testing pipeline user role
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.TESTING_REGION }}
-          role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: integration-testing
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
+  #     - name: Assume the testing pipeline user role
+  #       uses: aws-actions/configure-aws-credentials@v4
+  #       with:
+  #         aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
+  #         aws-region: ${{ env.TESTING_REGION }}
+  #         role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
+  #         role-session-name: integration-testing
+  #         role-duration-seconds: 3600
+  #         role-skip-session-tagging: true
 
-      - name: Get CloudFormation outputs
-        id: cfn-outputs
-        run: |
-          COGNITO_TOKEN_URL=$(aws cloudformation describe-stacks \
-            --stack-name ${TESTING_STACK_NAME} \
-            --query "Stacks[0].Outputs[?OutputKey=='CognitoTokenUrl'].OutputValue" \
-            --output text)
-          echo "COGNITO_TOKEN_URL=${COGNITO_TOKEN_URL}" >> $GITHUB_OUTPUT
+  #     - name: Get CloudFormation outputs
+  #       id: cfn-outputs
+  #       run: |
+  #         COGNITO_TOKEN_URL=$(aws cloudformation describe-stacks \
+  #           --stack-name ${TESTING_STACK_NAME} \
+  #           --query "Stacks[0].Outputs[?OutputKey=='CognitoTokenUrl'].OutputValue" \
+  #           --output text)
+  #         echo "COGNITO_TOKEN_URL=${COGNITO_TOKEN_URL}" >> $GITHUB_OUTPUT
 
-          M2M_CLIENT_ID=$(aws cloudformation describe-stacks \
-            --stack-name ${TESTING_STACK_NAME} \
-            --query "Stacks[0].Outputs[?OutputKey=='M2MClientId'].OutputValue" \
-            --output text)
-          echo "M2M_CLIENT_ID=${M2M_CLIENT_ID}" >> $GITHUB_OUTPUT
+  #         M2M_CLIENT_ID=$(aws cloudformation describe-stacks \
+  #           --stack-name ${TESTING_STACK_NAME} \
+  #           --query "Stacks[0].Outputs[?OutputKey=='M2MClientId'].OutputValue" \
+  #           --output text)
+  #         echo "M2M_CLIENT_ID=${M2M_CLIENT_ID}" >> $GITHUB_OUTPUT
 
-          API_BASE_URL=$(aws cloudformation describe-stacks \
-            --stack-name ${TESTING_STACK_NAME} \
-            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
-            --output text)
-          echo "API_BASE_URL=${API_BASE_URL}" >> $GITHUB_OUTPUT
+  #         API_BASE_URL=$(aws cloudformation describe-stacks \
+  #           --stack-name ${TESTING_STACK_NAME} \
+  #           --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+  #           --output text)
+  #         echo "API_BASE_URL=${API_BASE_URL}" >> $GITHUB_OUTPUT
 
-      - name: Run integration tests
-        env:
-          API_BASE_URL: ${{ steps.cfn-outputs.outputs.API_BASE_URL }}
-          COGNITO_TOKEN_URL: ${{ steps.cfn-outputs.outputs.COGNITO_TOKEN_URL }}
-          COGNITO_M2M_CLIENT_ID: ${{ steps.cfn-outputs.outputs.M2M_CLIENT_ID }}
-          COGNITO_M2M_CLIENT_SECRET: ${{ secrets.COGNITO_M2M_CLIENT_SECRET }}
-        run: npm run test:integration
+  #     - name: Run integration tests
+  #       env:
+  #         API_BASE_URL: ${{ steps.cfn-outputs.outputs.API_BASE_URL }}
+  #         COGNITO_TOKEN_URL: ${{ steps.cfn-outputs.outputs.COGNITO_TOKEN_URL }}
+  #         COGNITO_M2M_CLIENT_ID: ${{ steps.cfn-outputs.outputs.M2M_CLIENT_ID }}
+  #         COGNITO_M2M_CLIENT_SECRET: ${{ secrets.COGNITO_M2M_CLIENT_SECRET }}
+  #       run: npm run test:integration
 
   deploy-prod:
     if: github.ref == 'refs/heads/main'

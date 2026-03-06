@@ -27,14 +27,12 @@ const ddb = DynamoDBDocumentClient.from(client);
 const SLOTS_TABLE = process.env.ADVISING_SLOTS_TABLE!;
 
 const RequestBody = z.object({
-  slots: z
-    .array(
-      z.object({
-        slotDateTime: z.string(), // ISO-8601 UTC
-        advisorDisplayName: z.string().optional(),
-      }),
-    )
-    .min(1),
+  slots: z.array(
+    z.object({
+      slotDateTime: z.string(), // ISO-8601 UTC
+      advisorDisplayName: z.string().optional(),
+    }),
+  ),
 });
 
 export const handler = async (
