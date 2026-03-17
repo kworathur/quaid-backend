@@ -70,8 +70,16 @@ Resources:
       CallbackURLs:
         - !Ref CallbackUrl
         - http://localhost:3000/api/auth/callback/cognito
+        - !If
+          - IsProd
+          - https://demo.quaid-ai.com/api/auth/callback/cognito
+          - https://dev-demo.quaid-ai.com/api/auth/callback/cognito
       LogoutURLs:
         - http://localhost:3000/login
+        - !If
+          - IsProd
+          - https://demo.quaid-ai.com/login
+          - https://dev-demo.quaid-ai.com/login
       ClientName: !Sub ${AWS::StackName}-client
       SupportedIdentityProviders:
         - COGNITO
