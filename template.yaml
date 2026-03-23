@@ -475,6 +475,7 @@ Resources:
   ApplicationsTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      BillingMode: PAY_PER_REQUEST
       TableName: !Sub ${AWS::StackName}-ApplicationsTable
       AttributeDefinitions:
         - AttributeName: appid
@@ -496,6 +497,7 @@ Resources:
   InquiriesTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      BillingMode: PAY_PER_REQUEST
       TableName: !Sub ${AWS::StackName}-InquiriesTable
       AttributeDefinitions:
         - AttributeName: inquiryId
@@ -592,6 +594,7 @@ Resources:
   AdvisingSlotsTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      BillingMode: PAY_PER_REQUEST
       TableName: !Sub ${AWS::StackName}-AdvisingSlotsTable
       AttributeDefinitions:
         - AttributeName: slotId
@@ -626,6 +629,7 @@ Resources:
   AdvisingInsightsTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      BillingMode: PAY_PER_REQUEST
       TableName: !Sub ${AWS::StackName}-AdvisingInsightsTable
       AttributeDefinitions:
         - AttributeName: insightId
@@ -646,6 +650,7 @@ Resources:
   AdvisingInsightTemplatesTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      BillingMode: PAY_PER_REQUEST
       TableName: !Sub ${AWS::StackName}-AdvisingInsightTemplatesTable
       AttributeDefinitions:
         - AttributeName: templateKey
@@ -657,6 +662,7 @@ Resources:
   AdvisingRulesTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      BillingMode: PAY_PER_REQUEST
       TableName: !Sub ${AWS::StackName}-AdvisingRulesTable
       AttributeDefinitions:
         - AttributeName: ruleId
@@ -677,6 +683,7 @@ Resources:
   AdvisingConfigTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      BillingMode: PAY_PER_REQUEST
       TableName: !Sub ${AWS::StackName}-AdvisingConfigTable
       AttributeDefinitions:
         - AttributeName: configKey
