@@ -456,9 +456,6 @@ Resources:
       PrimaryKey:
         Name: id
         Type: Number
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   ProfilesTable:
     Type: AWS::Serverless::SimpleTable
@@ -466,9 +463,6 @@ Resources:
       PrimaryKey:
         Name: userSub
         Type: String
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   CounterTable:
     Type: AWS::Serverless::SimpleTable
@@ -476,9 +470,6 @@ Resources:
       PrimaryKey:
         Name: counter
         Type: String
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   # DynamoDB table for FAFSA financial aid applications
   ApplicationsTable:
@@ -500,12 +491,6 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 2
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   # DynamoDB table for background check inquiries
   InquiriesTable:
@@ -531,12 +516,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 2
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   # SQS Dead Letter Queue for failed address liveness checks
   AddressLivenessDeadLetterQueue:
@@ -635,9 +614,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 2
         - IndexName: studentId-slotDateTime-index
           KeySchema:
             - AttributeName: studentId
@@ -646,12 +622,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 2
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   AdvisingInsightsTable:
     Type: AWS::DynamoDB::Table
@@ -672,12 +642,6 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 2
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   AdvisingInsightTemplatesTable:
     Type: AWS::DynamoDB::Table
@@ -689,9 +653,6 @@ Resources:
       KeySchema:
         - AttributeName: templateKey
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   AdvisingRulesTable:
     Type: AWS::DynamoDB::Table
@@ -712,12 +673,6 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 2
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   AdvisingConfigTable:
     Type: AWS::DynamoDB::Table
@@ -729,9 +684,6 @@ Resources:
       KeySchema:
         - AttributeName: configKey
           KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
 
   # ── Student-scoped Lambda functions ─────────────────────────────────────────
 
