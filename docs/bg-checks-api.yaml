@@ -639,8 +639,8 @@ paths:
               zip_code: 30309
               social_security_number: 123456789
               date_of_birth: '2026-01-20'
-              high_school_name: Reedy
-              high_school_city: Frisco
+              high_school_name: Lone Star
+              high_school_city: Dallas
               high_school_state: TX
               students_income: 0
               parents_income: 120000
